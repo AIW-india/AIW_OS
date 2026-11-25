@@ -1,0 +1,30 @@
+{
+  "name": "aiw-os",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AIW OS - Enterprise Management Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev": "npm run dev:api",
+    "dev:all": "npm run dev --workspaces --if-present",
+    "dev:api": "npm run dev --workspace=@aiw/api",
+    "dev:web": "npm run dev --workspace=@aiw/web",
+    "dev:worker": "npm run dev --workspace=@aiw/worker",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "lint": "eslint .",
+    "format": "prettier --write \"**/*.{ts,tsx,js,json,md}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,js,json,md}\"",
+    "db:test": "npm run db:test --workspace=@aiw/api",
+    "prisma:generate": "npm run prisma:generate --workspace=@aiw/api",
+    "prisma:migrate": "npm run prisma:migrate --workspace=@aiw/api"
+  },
+  "devDependencies": {
+    "prettier": "^3.2.5",
+    "rimraf": "^5.0.7",
+    "typescript": "^5.4.5"
+  }
+}

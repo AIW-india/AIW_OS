@@ -1,0 +1,6 @@
+node_modules/
+dist/
+build/
+coverage/
+.git/
+AIW_OS_Documentation_Pack_v0.2/
