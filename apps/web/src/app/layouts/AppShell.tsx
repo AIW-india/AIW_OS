@@ -1,26 +1,45 @@
 import { useState } from 'react';
-import { NavLink, Outlet } from 'react-router-dom';
+import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  Award,
   Building2,
+  ClipboardList,
+  FolderTree,
   Home,
+  LogOut,
   Menu,
+  Shield,
   ShieldCheck,
+  Users,
   X,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useAuth } from '@/lib/auth/AuthContext';
 
 const navigation = [
   { name: 'Overview', to: '/', icon: Home },
+  { name: 'Users', to: '/users', icon: Users },
+  { name: 'Departments', to: '/departments', icon: FolderTree },
+  { name: 'Designations', to: '/designations', icon: Award },
+  { name: 'Roles & Permissions', to: '/roles', icon: Shield },
+  { name: 'Organisation', to: '/organisation', icon: Building2 },
+  { name: 'Audit Logs', to: '/audit-logs', icon: ClipboardList },
   { name: 'System Health', to: '/health', icon: Activity },
 ];
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const { user, organisation, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  const handleSignOut = async () => {
+    await signOut();
+    navigate('/login');
+  };
 
   return (
     <div className="flex min-h-screen bg-slate-50">
-      {/* Mobile sidebar backdrop */}
       {sidebarOpen && (
         <div
           className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
@@ -28,7 +47,6 @@ export function AppShell() {
         />
       )}
 
-      {/* Sidebar */}
       <aside
         className={cn(
           'fixed inset-y-0 left-0 z-50 flex w-64 flex-col border-r border-slate-200 bg-white transition-transform duration-200 lg:static lg:translate-x-0',
@@ -43,7 +61,7 @@ export function AppShell() {
             <div>
               <span className="text-sm font-bold tracking-tight text-slate-900">AIW OS</span>
               <span className="block text-[11px] font-medium text-slate-500">
-                Enterprise Platform
+                {organisation?.name || 'Enterprise Platform'}
               </span>
             </div>
           </div>
@@ -81,15 +99,23 @@ export function AppShell() {
           })}
         </nav>
 
-        <div className="border-t border-slate-200 p-4">
+        <div className="border-t border-slate-200 p-4 space-y-2">
           <div className="flex items-center gap-2 rounded-md bg-slate-50 px-3 py-2 text-xs text-slate-600">
             <ShieldCheck className="h-4 w-4 text-emerald-600" />
-            <span>Phase 0 Foundation</span>
+            <span className="truncate">{user?.email || 'Not signed in'}</span>
           </div>
+          {user && (
+            <button
+              onClick={() => void handleSignOut()}
+              className="flex w-full items-center gap-2 rounded-md px-3 py-1.5 text-xs font-medium text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+            >
+              <LogOut className="h-3.5 w-3.5" />
+              Sign Out
+            </button>
+          )}
         </div>
       </aside>
 
-      {/* Main Content */}
       <div className="flex flex-1 flex-col">
         <header className="flex h-16 items-center justify-between border-b border-slate-200 bg-white px-4 lg:px-8">
           <div className="flex items-center gap-3">
@@ -106,7 +132,7 @@ export function AppShell() {
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-              v0.1.0
+              Phase 0 IAM
             </span>
           </div>
         </header>

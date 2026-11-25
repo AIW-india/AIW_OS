@@ -7,8 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-/// Minimal system metadata table for baseline connectivity and migration verification.
-/// Business domain models will be added in subsequent phases.
+/// Minimal system metadata table from initial baseline.
 model SystemMetadata {
   id        String   @id @default(uuid()) @db.Uuid
   key       String   @unique
@@ -17,4 +16,300 @@ model SystemMetadata {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   @@map("system_metadata")
+}
+
+// ==============================================================================
+// ORGANISATIONS (MULTI-TENANT ROOT)
+// ==============================================================================
+
+model Organisation {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  legalName       String?  @map("legal_name")
+  slug            String   @unique
+  status          String   @default("ACTIVE") // ACTIVE, INACTIVE, SUSPENDED
+  timezone        String   @default("Asia/Kolkata")
+  defaultCurrency String   @default("INR") @map("default_currency")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  users              User[]
+  departments        Department[]
+  designations       Designation[]
+  roles              Role[]
+  rolePermissions    RolePermission[]
+  userRoles          UserRole[]
+  projectMemberships ProjectMembership[]
+  invitations        Invitation[]
+  auditLogs          AuditLog[]
+
+  @@map("organisations")
+}
+
+// ==============================================================================
+// AUTHENTICATION & USERS (BETTER AUTH COMPATIBLE + TENANT-AWARE)
+// ==============================================================================
+
+model User {
+  id             String    @id @default(uuid()) @db.Uuid
+  organisationId String?   @map("organisation_id") @db.Uuid
+  email          String    @unique
+  emailVerified  Boolean   @default(false) @map("email_verified")
+  name           String
+  image          String?
+  phone          String?
+  employeeCode   String?   @map("employee_code")
+  departmentId   String?   @map("department_id") @db.Uuid
+  designationId  String?   @map("designation_id") @db.Uuid
+  status         String    @default("ACTIVE") // INVITED, ACTIVE, SUSPENDED, DEACTIVATED
+  lastLoginAt    DateTime? @map("last_login_at") @db.Timestamptz(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation       Organisation?       @relation(fields: [organisationId], references: [id], onDelete: Restrict)
+  department         Department?         @relation(fields: [departmentId], references: [id], onDelete: SetNull)
+  designation        Designation?        @relation(fields: [designationId], references: [id], onDelete: SetNull)
+  sessions           Session[]
+  accounts           Account[]
+  userRoles          UserRole[]          @relation("UserAssignedRoles")
+  assignedRoles      UserRole[]          @relation("AssignedByUser")
+  projectMemberships ProjectMembership[]
+  sentInvitations    Invitation[]        @relation("InvitedByUser")
+  auditLogs          AuditLog[]          @relation("AuditActor")
+
+  @@index([organisationId])
+  @@index([departmentId])
+  @@index([designationId])
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  token     String   @unique
+  expiresAt DateTime @map("expires_at") @db.Timestamptz(6)
+  ipAddress String?  @map("ip_address")
+  userAgent String?  @map("user_agent")
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Account {
+  id                    String    @id @default(uuid()) @db.Uuid
+  userId                String    @map("user_id") @db.Uuid
+  accountId             String    @map("account_id")
+  providerId            String    @map("provider_id")
+  accessToken           String?   @map("access_token")
+  refreshToken          String?   @map("refresh_token")
+  accessTokenExpiresAt  DateTime? @map("access_token_expires_at") @db.Timestamptz(6)
+  refreshTokenExpiresAt DateTime? @map("refresh_token_expires_at") @db.Timestamptz(6)
+  scope                 String?
+  idToken               String?   @map("id_token")
+  password              String?
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Verification {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String
+  value      String
+  expiresAt  DateTime @map("expires_at") @db.Timestamptz(6)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  @@map("verifications")
+}
+
+// ==============================================================================
+// ORGANISATION STRUCTURE (DEPARTMENTS & DESIGNATIONS)
+// ==============================================================================
+
+model Department {
+  id                 String   @id @default(uuid()) @db.Uuid
+  organisationId     String   @map("organisation_id") @db.Uuid
+  name               String
+  code               String
+  parentDepartmentId String?  @map("parent_department_id") @db.Uuid
+  status             String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation     Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  parentDepartment Department?  @relation("DepartmentHierarchy", fields: [parentDepartmentId], references: [id], onDelete: SetNull)
+  subDepartments   Department[] @relation("DepartmentHierarchy")
+  users            User[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@map("departments")
+}
+
+model Designation {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  code           String
+  description    String?
+  status         String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  users        User[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@map("designations")
+}
+
+// ==============================================================================
+// RBAC (ROLES, PERMISSIONS, ASSIGNMENTS, PROJECT ACCESS)
+// ==============================================================================
+
+model Permission {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique // e.g., users.view, users.create, roles.manage
+  module      String   // e.g., users, organisation, roles, audit
+  action      String   // e.g., view, create, update, manage, approve
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  rolePermissions RolePermission[]
+
+  @@map("permissions")
+}
+
+model Role {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  code           String
+  description    String?
+  isSystemRole   Boolean  @default(false) @map("is_system_role")
+  status         String   @default("ACTIVE") // ACTIVE, ARCHIVED
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  rolePermissions RolePermission[]
+  userRoles       UserRole[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@map("roles")
+}
+
+model RolePermission {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  roleId         String   @map("role_id") @db.Uuid
+  permissionId   String   @map("permission_id") @db.Uuid
+  scopeType      String   @default("ORGANISATION") @map("scope_type") // ORGANISATION, DEPARTMENT, PROJECT, SELF
+  effect         String   @default("ALLOW") // ALLOW, DENY
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission   @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([roleId, permissionId])
+  @@index([organisationId])
+  @@map("role_permissions")
+}
+
+model UserRole {
+  id               String   @id @default(uuid()) @db.Uuid
+  organisationId   String   @map("organisation_id") @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  roleId           String   @map("role_id") @db.Uuid
+  assignedByUserId String?  @map("assigned_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation("UserAssignedRoles", fields: [userId], references: [id], onDelete: Cascade)
+  role         Role         @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  assignedBy   User?        @relation("AssignedByUser", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@unique([userId, roleId])
+  @@index([organisationId])
+  @@map("user_roles")
+}
+
+model ProjectMembership {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  userId         String   @map("user_id") @db.Uuid
+  projectRole    String   @map("project_role")
+  status         String   @default("ACTIVE") // ACTIVE, REVOKED
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organisationId, projectId, userId])
+  @@index([organisationId])
+  @@index([userId])
+  @@map("project_memberships")
+}
+
+// ==============================================================================
+// INVITATIONS & AUDIT LOGS
+// ==============================================================================
+
+model Invitation {
+  id              String    @id @default(uuid()) @db.Uuid
+  organisationId  String    @map("organisation_id") @db.Uuid
+  email           String
+  invitedByUserId String?   @map("invited_by_user_id") @db.Uuid
+  roleId          String?   @map("role_id") @db.Uuid
+  departmentId    String?   @map("department_id") @db.Uuid
+  designationId   String?   @map("designation_id") @db.Uuid
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt      DateTime? @map("accepted_at") @db.Timestamptz(6)
+  status          String    @default("PENDING") // PENDING, ACCEPTED, EXPIRED, REVOKED
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  invitedBy    User?        @relation("InvitedByUser", fields: [invitedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId])
+  @@index([email])
+  @@map("invitations")
+}
+
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String?  @map("organisation_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String
+  resourceType   String   @map("resource_type")
+  resourceId     String?  @map("resource_id")
+  occurredAt     DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+  requestId      String?  @map("request_id")
+  ipAddress      String?  @map("ip_address")
+  metadataJson   Json?    @map("metadata_json")
+  beforeJson     Json?    @map("before_json")
+  afterJson      Json?    @map("after_json")
+
+  organisation Organisation? @relation(fields: [organisationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation("AuditActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId, occurredAt])
+  @@index([actorUserId])
+  @@map("audit_logs")
 }
