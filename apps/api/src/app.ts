@@ -16,6 +16,14 @@ import { departmentRoutes } from './modules/departments/departments.routes.js';
 import { designationRoutes } from './modules/designations/designations.routes.js';
 import { roleRoutes } from './modules/roles/roles.routes.js';
 import { auditRoutes } from './modules/audit/audit.routes.js';
+import { leadRoutes } from './modules/crm/leads.routes.js';
+import { customerRoutes } from './modules/crm/customers.routes.js';
+import { pipelineRoutes } from './modules/crm/pipeline.routes.js';
+import { leadSourceRoutes } from './modules/crm/lead-sources.routes.js';
+import { lostReasonRoutes } from './modules/crm/lost-reasons.routes.js';
+import { followUpRoutes } from './modules/crm/followups.routes.js';
+import { siteVisitRoutes } from './modules/crm/site-visits.routes.js';
+import { dashboardRoutes } from './modules/crm/dashboard.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -54,6 +62,19 @@ export function createApp(): Express {
   v1Router.use('/designations', designationRoutes);
   v1Router.use('/roles', roleRoutes);
   v1Router.use('/audit-logs', auditRoutes);
+
+  // CRM routes (/api/v1/crm/*)
+  const crmRouter = Router();
+  crmRouter.use('/leads', leadRoutes);
+  crmRouter.use('/customers', customerRoutes);
+  crmRouter.use('/pipeline-stages', pipelineRoutes);
+  crmRouter.use('/lead-sources', leadSourceRoutes);
+  crmRouter.use('/lost-reasons', lostReasonRoutes);
+  crmRouter.use('/follow-ups', followUpRoutes);
+  crmRouter.use('/site-visits', siteVisitRoutes);
+  crmRouter.use('/dashboard', dashboardRoutes);
+
+  v1Router.use('/crm', crmRouter);
 
   app.use(`/api/${env.API_VERSION}`, v1Router);
 

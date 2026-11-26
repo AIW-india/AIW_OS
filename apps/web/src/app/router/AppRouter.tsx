@@ -9,13 +9,58 @@ import { DepartmentsPage } from '@/modules/departments/DepartmentsPage';
 import { DesignationsPage } from '@/modules/designations/DesignationsPage';
 import { RolesPage } from '@/modules/roles/RolesPage';
 import { AuditLogsPage } from '@/modules/audit/AuditLogsPage';
+import { CrmOverviewPage } from '@/modules/crm/CrmOverviewPage';
+import { LeadsListPage } from '@/modules/crm/LeadsListPage';
+import { CreateLeadPage } from '@/modules/crm/CreateLeadPage';
+import { LeadDetailsPage } from '@/modules/crm/LeadDetailsPage';
+import { PipelineKanbanPage } from '@/modules/crm/PipelineKanbanPage';
+import { CustomersListPage } from '@/modules/crm/CustomersListPage';
+import { CustomerDetailsPage } from '@/modules/crm/CustomerDetailsPage';
+import { FollowUpsPage } from '@/modules/crm/FollowUpsPage';
+import { SiteVisitsPage } from '@/modules/crm/SiteVisitsPage';
+import { LostLeadsPage } from '@/modules/crm/LostLeadsPage';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { LoadingSpinner } from '@/components/feedback/LoadingSpinner';
+import { AccessDeniedPage } from '@/components/feedback/AccessDeniedPage';
 
-function ProtectedRoute({ children }: { children: JSX.Element }) {
-  const { user, loading } = useAuth();
-  if (loading) return <LoadingSpinner label="Verifying session..." />;
+interface ProtectedRouteProps {
+  children: JSX.Element;
+  permission?: string;
+  anyPermissions?: string[];
+  moduleName?: string;
+}
+
+export function ProtectedRoute({
+  children,
+  permission,
+  anyPermissions,
+  moduleName,
+}: ProtectedRouteProps) {
+  const { user, loading, hasPermission } = useAuth();
+
+  if (loading) return <LoadingSpinner label="Verifying session and permissions..." />;
   if (!user) return <Navigate to="/login" replace />;
+
+  if (user.status !== 'ACTIVE') {
+    return <AccessDeniedPage moduleName="Active Account" requiredPermission="Account is deactivated" />;
+  }
+
+  if (permission && !hasPermission(permission)) {
+    return <AccessDeniedPage requiredPermission={permission} moduleName={moduleName} />;
+  }
+
+  if (anyPermissions && anyPermissions.length > 0) {
+    const hasAny = anyPermissions.some((p) => hasPermission(p));
+    if (!hasAny) {
+      return (
+        <AccessDeniedPage
+          requiredPermission={anyPermissions.join(' or ')}
+          moduleName={moduleName}
+        />
+      );
+    }
+  }
+
   return children;
 }
 
@@ -52,7 +97,7 @@ export function AppRouter() {
           <Route
             path="/users"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="users.view" moduleName="Users">
                 <UsersPage />
               </ProtectedRoute>
             }
@@ -60,7 +105,7 @@ export function AppRouter() {
           <Route
             path="/departments"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="departments.view" moduleName="Departments">
                 <DepartmentsPage />
               </ProtectedRoute>
             }
@@ -68,7 +113,7 @@ export function AppRouter() {
           <Route
             path="/designations"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="designations.view" moduleName="Designations">
                 <DesignationsPage />
               </ProtectedRoute>
             }
@@ -76,7 +121,7 @@ export function AppRouter() {
           <Route
             path="/roles"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="roles.view" moduleName="Roles & Permissions">
                 <RolesPage />
               </ProtectedRoute>
             }
@@ -84,7 +129,7 @@ export function AppRouter() {
           <Route
             path="/organisation"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="organisation.view" moduleName="Organisation">
                 <OrganisationPage />
               </ProtectedRoute>
             }
@@ -92,8 +137,93 @@ export function AppRouter() {
           <Route
             path="/audit-logs"
             element={
-              <ProtectedRoute>
+              <ProtectedRoute permission="audit.view" moduleName="Audit Logs">
                 <AuditLogsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* CRM Module Routes */}
+          <Route
+            path="/crm"
+            element={
+              <ProtectedRoute
+                anyPermissions={['crm.leads.view', 'crm.reports.view']}
+                moduleName="CRM Overview"
+              >
+                <CrmOverviewPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/leads"
+            element={
+              <ProtectedRoute permission="crm.leads.view" moduleName="Leads">
+                <LeadsListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/leads/create"
+            element={
+              <ProtectedRoute permission="crm.leads.create" moduleName="Create Lead">
+                <CreateLeadPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/leads/:id"
+            element={
+              <ProtectedRoute permission="crm.leads.view" moduleName="Lead Details">
+                <LeadDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/pipeline"
+            element={
+              <ProtectedRoute permission="crm.leads.view" moduleName="Pipeline Kanban">
+                <PipelineKanbanPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/customers"
+            element={
+              <ProtectedRoute permission="crm.customers.view" moduleName="Customers">
+                <CustomersListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/customers/:id"
+            element={
+              <ProtectedRoute permission="crm.customers.view" moduleName="Customer Details">
+                <CustomerDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/follow-ups"
+            element={
+              <ProtectedRoute permission="crm.followups.manage" moduleName="Follow-ups">
+                <FollowUpsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/site-visits"
+            element={
+              <ProtectedRoute permission="crm.site_visits.manage" moduleName="Site Visits">
+                <SiteVisitsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/crm/lost-leads"
+            element={
+              <ProtectedRoute permission="crm.leads.view" moduleName="Lost Leads Report">
+                <LostLeadsPage />
               </ProtectedRoute>
             }
           />

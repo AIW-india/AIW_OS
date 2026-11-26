@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -13,30 +13,73 @@ import {
   ShieldCheck,
   Users,
   X,
+  KanbanSquare,
+  UserCheck,
+  PhoneCall,
+  MapPin,
+  PieChart,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth/AuthContext';
 
-const navigation = [
+export interface NavigationItem {
+  name: string;
+  to: string;
+  icon: typeof Home;
+  permission?: string;
+  anyPermissions?: string[];
+}
+
+export const navigationItems: NavigationItem[] = [
   { name: 'Overview', to: '/', icon: Home },
-  { name: 'Users', to: '/users', icon: Users },
-  { name: 'Departments', to: '/departments', icon: FolderTree },
-  { name: 'Designations', to: '/designations', icon: Award },
-  { name: 'Roles & Permissions', to: '/roles', icon: Shield },
-  { name: 'Organisation', to: '/organisation', icon: Building2 },
-  { name: 'Audit Logs', to: '/audit-logs', icon: ClipboardList },
+  {
+    name: 'CRM Overview',
+    to: '/crm',
+    icon: PieChart,
+    anyPermissions: ['crm.leads.view', 'crm.reports.view'],
+  },
+  { name: 'Leads', to: '/crm/leads', icon: Users, permission: 'crm.leads.view' },
+  { name: 'Pipeline Kanban', to: '/crm/pipeline', icon: KanbanSquare, permission: 'crm.leads.view' },
+  { name: 'Customers', to: '/crm/customers', icon: UserCheck, permission: 'crm.customers.view' },
+  { name: 'Follow-ups', to: '/crm/follow-ups', icon: PhoneCall, permission: 'crm.followups.manage' },
+  { name: 'Site Visits', to: '/crm/site-visits', icon: MapPin, permission: 'crm.site_visits.manage' },
+  { name: 'Users', to: '/users', icon: Users, permission: 'users.view' },
+  { name: 'Departments', to: '/departments', icon: FolderTree, permission: 'departments.view' },
+  { name: 'Designations', to: '/designations', icon: Award, permission: 'designations.view' },
+  { name: 'Roles & Permissions', to: '/roles', icon: Shield, permission: 'roles.view' },
+  { name: 'Organisation', to: '/organisation', icon: Building2, permission: 'organisation.view' },
+  { name: 'Audit Logs', to: '/audit-logs', icon: ClipboardList, permission: 'audit.view' },
   { name: 'System Health', to: '/health', icon: Activity },
 ];
 
 export function AppShell() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const { user, organisation, signOut } = useAuth();
+  const { user, organisation, signOut, hasPermission, loading } = useAuth();
   const navigate = useNavigate();
 
   const handleSignOut = async () => {
     await signOut();
     navigate('/login');
   };
+
+  // Filter navigation items based on the user's active permissions
+  const visibleNavItems = useMemo(() => {
+    if (loading || !user) return [];
+
+    return navigationItems.filter((item) => {
+      // Items with no permission specified are public to all authenticated users
+      if (!item.permission && (!item.anyPermissions || item.anyPermissions.length === 0)) {
+        return true;
+      }
+      if (item.permission && hasPermission(item.permission)) {
+        return true;
+      }
+      if (item.anyPermissions && item.anyPermissions.some((p) => hasPermission(p))) {
+        return true;
+      }
+      return false;
+    });
+  }, [loading, user, hasPermission]);
 
   return (
     <div className="flex min-h-screen bg-slate-50">
@@ -75,7 +118,7 @@ export function AppShell() {
         </div>
 
         <nav className="flex-1 space-y-1 p-3">
-          {navigation.map((item) => {
+          {visibleNavItems.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -132,7 +175,7 @@ export function AppShell() {
           </div>
           <div className="flex items-center gap-3">
             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
-              Phase 0 IAM
+              {organisation?.name || 'Enterprise'}
             </span>
           </div>
         </header>
