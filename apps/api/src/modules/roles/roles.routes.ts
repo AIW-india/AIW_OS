@@ -9,6 +9,11 @@ import {
 import { validateRequest } from '../../common/middleware/validate.js';
 import { recordAuditEvent } from '../../common/audit/audit.service.js';
 import { AppError, NotFoundError } from '../../common/errors/app-error.js';
+import {
+  PREDEFINED_ROLE_TEMPLATES,
+  seedOrganisationRoleTemplates,
+  resetRoleToTemplateDefaults,
+} from '../../common/rbac/permissions-catalog.js';
 
 const router = Router();
 
@@ -26,6 +31,113 @@ const CreateRoleSchema = z.object({
 const AssignPermissionsSchema = z.object({
   permissionCodes: z.array(z.string()),
 });
+
+/**
+ * GET /api/v1/roles/templates
+ * Returns predefined template definitions and default permission mappings.
+ */
+router.get(
+  '/templates',
+  requireAuth,
+  requireOrganisation,
+  requirePermission('roles.view'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      res.status(200).json({ data: PREDEFINED_ROLE_TEMPLATES, meta: { requestId: req.id } });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/roles/seed-templates
+ * Idempotently creates any missing predefined role templates for the organisation.
+ * Preserves existing customized role permissions.
+ */
+router.post(
+  '/seed-templates',
+  requireAuth,
+  requireOrganisation,
+  requirePermission('roles.manage'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const orgId = req.auth!.organisationId!;
+      await seedOrganisationRoleTemplates(orgId);
+
+      await recordAuditEvent({
+        organisationId: orgId,
+        actorUserId: req.auth!.userId,
+        action: 'roles.seeded_templates',
+        resourceType: 'organisation',
+        resourceId: orgId,
+        requestId: req.id,
+        ipAddress: req.ip,
+      });
+
+      res.status(200).json({
+        data: { message: 'Predefined role templates seeded successfully' },
+        meta: { requestId: req.id },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
+
+/**
+ * POST /api/v1/roles/:id/reset-defaults
+ * Explicitly restores a predefined role's permissions to factory template defaults.
+ */
+router.post(
+  '/:id/reset-defaults',
+  requireAuth,
+  requireOrganisation,
+  requirePermission('roles.manage'),
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      const orgId = req.auth!.organisationId!;
+      const role = await prisma.role.findFirst({
+        where: { id: req.params.id, organisationId: orgId },
+      });
+      if (!role) throw new NotFoundError('Role not found');
+
+      const template = PREDEFINED_ROLE_TEMPLATES.find((t) => t.code === role.code);
+      if (!template) {
+        throw new AppError(
+          'Only predefined system roles can be reset to factory defaults',
+          400,
+          'NOT_A_TEMPLATE',
+        );
+      }
+
+      const result = await resetRoleToTemplateDefaults(orgId, role.id);
+
+      await recordAuditEvent({
+        organisationId: orgId,
+        actorUserId: req.auth!.userId,
+        action: 'role.reset_to_defaults',
+        resourceType: 'role',
+        resourceId: role.id,
+        requestId: req.id,
+        ipAddress: req.ip,
+        afterJson: { restoredPermissions: result.restoredPermissions },
+      });
+
+      res.status(200).json({
+        data: {
+          roleId: role.id,
+          code: role.code,
+          name: role.name,
+          permissions: result.restoredPermissions,
+        },
+        meta: { requestId: req.id },
+      });
+    } catch (err) {
+      next(err);
+    }
+  },
+);
 
 router.get(
   '/permissions',

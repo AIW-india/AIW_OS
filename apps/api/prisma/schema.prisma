@@ -43,6 +43,16 @@ model Organisation {
   invitations        Invitation[]
   auditLogs          AuditLog[]
 
+  // CRM relations
+  leadSources        LeadSource[]
+  pipelineStages     LeadPipelineStage[]
+  lostReasonCategories LostReasonCategory[]
+  leads              Lead[]
+  customers          Customer[]
+  followUps          FollowUp[]
+  siteVisits         SiteVisit[]
+  leadActivities     LeadActivity[]
+
   @@map("organisations")
 }
 
@@ -76,6 +86,20 @@ model User {
   projectMemberships ProjectMembership[]
   sentInvitations    Invitation[]        @relation("InvitedByUser")
   auditLogs          AuditLog[]          @relation("AuditActor")
+
+  // CRM relations
+  assignedLeads         Lead[]               @relation("LeadAssigned")
+  createdLeads          Lead[]               @relation("LeadCreatedBy")
+  leadAssignmentsTo     LeadAssignment[]     @relation("LeadAssignedTo")
+  leadAssignmentsBy     LeadAssignment[]     @relation("LeadAssignedBy")
+  createdCustomers      Customer[]           @relation("CustomerCreatedBy")
+  customerNotes         CustomerNote[]       @relation("CustomerNoteCreatedBy")
+  assignedFollowUps     FollowUp[]           @relation("FollowUpAssigned")
+  createdFollowUps      FollowUp[]           @relation("FollowUpCreatedBy")
+  assignedSiteVisits    SiteVisit[]          @relation("SiteVisitAssigned")
+  createdSiteVisits     SiteVisit[]          @relation("SiteVisitCreatedBy")
+  uploadedAttachments   SiteVisitAttachment[] @relation("SiteVisitAttachmentUploadedBy")
+  leadActivitiesActor   LeadActivity[]       @relation("LeadActivityActor")
 
   @@index([organisationId])
   @@index([departmentId])
@@ -312,4 +336,381 @@ model AuditLog {
   @@index([organisationId, occurredAt])
   @@index([actorUserId])
   @@map("audit_logs")
+}
+
+// ==============================================================================
+// CRM — LEAD SOURCES (ORG-SCOPED, CONFIGURABLE)
+// ==============================================================================
+
+model LeadSource {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  code           String
+  description    String?
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@map("lead_sources")
+}
+
+// ==============================================================================
+// CRM — LEAD PIPELINE STAGES (ORG-SCOPED, CONFIGURABLE)
+// ==============================================================================
+
+model LeadPipelineStage {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  code           String
+  description    String?
+  order          Int
+  isTerminal     Boolean  @default(false) @map("is_terminal")
+  isActive       Boolean  @default(true) @map("is_active")
+  color          String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation   Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leads          Lead[]
+  stageHistoryTo   LeadStageHistory[] @relation("StageHistoryTo")
+  stageHistoryFrom LeadStageHistory[] @relation("StageHistoryFrom")
+
+  @@unique([organisationId, code])
+  @@unique([organisationId, order])
+  @@index([organisationId])
+  @@map("lead_pipeline_stages")
+}
+
+// ==============================================================================
+// CRM — LOST REASON CATEGORIES (ORG-SCOPED, CONFIGURABLE)
+// ==============================================================================
+
+model LostReasonCategory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  code           String
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  leads        Lead[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId])
+  @@map("lost_reason_categories")
+}
+
+// ==============================================================================
+// CRM — LEADS
+// ==============================================================================
+
+model Lead {
+  id               String    @id @default(uuid()) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  leadNumber       String    @map("lead_number")
+  customerName     String    @map("customer_name")
+  phone            String?
+  email            String?
+  location         String?
+  propertyType     String?   @map("property_type")
+  projectCategory  String?   @map("project_category")
+  requirements     String?
+  estimatedBudget  Decimal?  @map("estimated_budget") @db.Decimal(15, 2)
+  expectedStartDate DateTime? @map("expected_start_date") @db.Date
+  sourceId         String?   @map("source_id") @db.Uuid
+  assignedUserId   String?   @map("assigned_user_id") @db.Uuid
+  priority         String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  status           String    @default("OPEN") // OPEN, WON, LOST, ARCHIVED
+  pipelineStageId  String?   @map("pipeline_stage_id") @db.Uuid
+  lastContactedDate DateTime? @map("last_contacted_date") @db.Timestamptz(6)
+  nextFollowUpDate DateTime? @map("next_follow_up_date") @db.Timestamptz(6)
+  lostReasonId     String?   @map("lost_reason_id") @db.Uuid
+  lostRemarks      String?   @map("lost_remarks")
+  archivedAt       DateTime? @map("archived_at") @db.Timestamptz(6)
+  createdByUserId  String?   @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation  Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  source        LeadSource?         @relation(fields: [sourceId], references: [id], onDelete: SetNull)
+  assignedUser  User?               @relation("LeadAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdByUser User?               @relation("LeadCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  pipelineStage LeadPipelineStage?  @relation(fields: [pipelineStageId], references: [id], onDelete: SetNull)
+  lostReason    LostReasonCategory? @relation(fields: [lostReasonId], references: [id], onDelete: SetNull)
+  stageHistory  LeadStageHistory[]
+  assignments   LeadAssignment[]
+  followUps     FollowUp[]          @relation("LeadFollowUps")
+  siteVisits    SiteVisit[]         @relation("LeadSiteVisits")
+  activities    LeadActivity[]
+  customer      Customer?           @relation("ConvertedFromLead")
+
+  @@unique([organisationId, leadNumber])
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@index([organisationId, pipelineStageId])
+  @@index([assignedUserId])
+  @@index([sourceId])
+  @@map("leads")
+}
+
+// ==============================================================================
+// CRM — LEAD STAGE HISTORY
+// ==============================================================================
+
+model LeadStageHistory {
+  id              String   @id @default(uuid()) @db.Uuid
+  leadId          String   @map("lead_id") @db.Uuid
+  fromStageId     String?  @map("from_stage_id") @db.Uuid
+  toStageId       String   @map("to_stage_id") @db.Uuid
+  changedByUserId String?  @map("changed_by_user_id") @db.Uuid
+  remarks         String?
+  occurredAt      DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  lead      Lead               @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  fromStage LeadPipelineStage? @relation("StageHistoryFrom", fields: [fromStageId], references: [id], onDelete: SetNull)
+  toStage   LeadPipelineStage  @relation("StageHistoryTo", fields: [toStageId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@map("lead_stage_history")
+}
+
+// ==============================================================================
+// CRM — LEAD ASSIGNMENTS
+// ==============================================================================
+
+model LeadAssignment {
+  id               String   @id @default(uuid()) @db.Uuid
+  leadId           String   @map("lead_id") @db.Uuid
+  assignedToUserId String   @map("assigned_to_user_id") @db.Uuid
+  assignedByUserId String?  @map("assigned_by_user_id") @db.Uuid
+  remarks          String?
+  assignedAt       DateTime @default(now()) @map("assigned_at") @db.Timestamptz(6)
+
+  lead       Lead @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  assignedTo User @relation("LeadAssignedTo", fields: [assignedToUserId], references: [id], onDelete: Cascade)
+  assignedBy User? @relation("LeadAssignedBy", fields: [assignedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([leadId])
+  @@index([assignedToUserId])
+  @@map("lead_assignments")
+}
+
+// ==============================================================================
+// CRM — CUSTOMERS
+// ==============================================================================
+
+model Customer {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  customerNumber      String    @map("customer_number")
+  type                String    @default("INDIVIDUAL") // INDIVIDUAL, COMPANY
+  name                String
+  legalName           String?   @map("legal_name")
+  phone               String?
+  email               String?
+  billingAddress      String?   @map("billing_address")
+  status              String    @default("ACTIVE") // ACTIVE, INACTIVE
+  convertedFromLeadId String?   @unique @map("converted_from_lead_id") @db.Uuid
+  createdByUserId     String?   @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation    Organisation     @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  convertedFromLead Lead?          @relation("ConvertedFromLead", fields: [convertedFromLeadId], references: [id], onDelete: SetNull)
+  createdByUser   User?            @relation("CustomerCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  contacts        CustomerContact[]
+  addresses       CustomerAddress[]
+  notes           CustomerNote[]
+  followUps       FollowUp[]       @relation("CustomerFollowUps")
+  siteVisits      SiteVisit[]      @relation("CustomerSiteVisits")
+
+  @@unique([organisationId, customerNumber])
+  @@index([organisationId])
+  @@index([organisationId, status])
+  @@map("customers")
+}
+
+// ==============================================================================
+// CRM — CUSTOMER CONTACTS
+// ==============================================================================
+
+model CustomerContact {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  name       String
+  phone      String?
+  email      String?
+  role       String?
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_contacts")
+}
+
+// ==============================================================================
+// CRM — CUSTOMER ADDRESSES
+// ==============================================================================
+
+model CustomerAddress {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @map("customer_id") @db.Uuid
+  type       String   @default("SITE") // BILLING, SITE, CORRESPONDENCE
+  line1      String
+  line2      String?
+  city       String
+  state      String
+  pincode    String
+  country    String   @default("India")
+  isPrimary  Boolean  @default(false) @map("is_primary")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  @@index([customerId])
+  @@map("customer_addresses")
+}
+
+// ==============================================================================
+// CRM — CUSTOMER NOTES
+// ==============================================================================
+
+model CustomerNote {
+  id              String   @id @default(uuid()) @db.Uuid
+  customerId      String   @map("customer_id") @db.Uuid
+  content         String
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  customer  Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  createdBy User?    @relation("CustomerNoteCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([customerId])
+  @@map("customer_notes")
+}
+
+// ==============================================================================
+// CRM — FOLLOW-UPS
+// ==============================================================================
+
+model FollowUp {
+  id               String    @id @default(uuid()) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  leadId           String?   @map("lead_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  type             String    // CALL, WHATSAPP, EMAIL, MEETING
+  scheduledAt      DateTime  @map("scheduled_at") @db.Timestamptz(6)
+  assignedUserId   String?   @map("assigned_user_id") @db.Uuid
+  status           String    @default("PENDING") // PENDING, COMPLETED, CANCELLED
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
+  notes            String?
+  outcome          String?
+  reminderAt       DateTime? @map("reminder_at") @db.Timestamptz(6)
+  createdByUserId  String?   @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead?        @relation("LeadFollowUps", fields: [leadId], references: [id], onDelete: SetNull)
+  customer     Customer?    @relation("CustomerFollowUps", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedUser User?        @relation("FollowUpAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy    User?        @relation("FollowUpCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([customerId])
+  @@index([assignedUserId])
+  @@index([organisationId, status, scheduledAt])
+  @@map("follow_ups")
+}
+
+// ==============================================================================
+// CRM — SITE VISITS
+// ==============================================================================
+
+model SiteVisit {
+  id               String    @id @default(uuid()) @db.Uuid
+  organisationId   String    @map("organisation_id") @db.Uuid
+  leadId           String?   @map("lead_id") @db.Uuid
+  customerId       String?   @map("customer_id") @db.Uuid
+  assignedUserId   String?   @map("assigned_user_id") @db.Uuid
+  visitDate        DateTime  @map("visit_date") @db.Timestamptz(6)
+  address          String?
+  status           String    @default("SCHEDULED") // SCHEDULED, COMPLETED, CANCELLED
+  remarks          String?
+  completedAt      DateTime? @map("completed_at") @db.Timestamptz(6)
+  createdByUserId  String?   @map("created_by_user_id") @db.Uuid
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt        DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead?              @relation("LeadSiteVisits", fields: [leadId], references: [id], onDelete: SetNull)
+  customer     Customer?          @relation("CustomerSiteVisits", fields: [customerId], references: [id], onDelete: SetNull)
+  assignedUser User?              @relation("SiteVisitAssigned", fields: [assignedUserId], references: [id], onDelete: SetNull)
+  createdBy    User?              @relation("SiteVisitCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  attachments  SiteVisitAttachment[]
+
+  @@index([organisationId])
+  @@index([leadId])
+  @@index([customerId])
+  @@index([assignedUserId])
+  @@map("site_visits")
+}
+
+// ==============================================================================
+// CRM — SITE VISIT ATTACHMENTS (STORAGE ABSTRACTION)
+// ==============================================================================
+
+model SiteVisitAttachment {
+  id               String   @id @default(uuid()) @db.Uuid
+  siteVisitId      String   @map("site_visit_id") @db.Uuid
+  fileName         String   @map("file_name")
+  fileKey          String   @map("file_key")
+  fileSize         Int?     @map("file_size")
+  mimeType         String?  @map("mime_type")
+  uploadedByUserId String?  @map("uploaded_by_user_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  siteVisit  SiteVisit @relation(fields: [siteVisitId], references: [id], onDelete: Cascade)
+  uploadedBy User?     @relation("SiteVisitAttachmentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([siteVisitId])
+  @@map("site_visit_attachments")
+}
+
+// ==============================================================================
+// CRM — LEAD ACTIVITY TIMELINE
+// ==============================================================================
+
+model LeadActivity {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  leadId         String   @map("lead_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  activityType   String   @map("activity_type") // CREATED, STAGE_CHANGED, ASSIGNED, NOTE_ADDED, FOLLOW_UP_SCHEDULED, SITE_VISIT_SCHEDULED, STATUS_CHANGED, CONVERTED, etc.
+  description    String
+  metadataJson   Json?    @map("metadata_json")
+  occurredAt     DateTime @default(now()) @map("occurred_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead         Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  actor        User?        @relation("LeadActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([leadId, occurredAt])
+  @@index([organisationId])
+  @@map("lead_activities")
 }

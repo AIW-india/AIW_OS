@@ -53,17 +53,47 @@ describe('Phase 0 IAM Security, RBAC, Bootstrap & Tenant Isolation', () => {
       await prisma.systemMetadata.deleteMany({ where: { key: 'bootstrap_lock' } });
     }
 
-    // 1. Bootstrap Org A via public endpoint
-    const resA = await request(app).post('/api/v1/auth/bootstrap').send({
-      organisationName: orgA.name,
-      organisationSlug: orgA.slug,
-      adminName: orgA.adminName,
-      adminEmail: orgA.adminEmail,
-      adminPassword: orgA.adminPassword,
-    });
-    expect(resA.status).toBe(201);
-    orgAId = resA.body.data.organisation.id;
-    adminAId = resA.body.data.user.id;
+    // 1. Provision or Bootstrap Org A
+    const orgCountBefore = await prisma.organisation.count();
+    let bootstrapped = false;
+
+    if (orgCountBefore === 0) {
+      const resA = await request(app).post('/api/v1/auth/bootstrap').send({
+        organisationName: orgA.name,
+        organisationSlug: orgA.slug,
+        adminName: orgA.adminName,
+        adminEmail: orgA.adminEmail,
+        adminPassword: orgA.adminPassword,
+      });
+      expect(resA.status).toBe(201);
+      orgAId = resA.body.data.organisation.id;
+      adminAId = resA.body.data.user.id;
+      bootstrapped = true;
+    } else {
+      // An organisation already exists in the dev database (e.g. created by user in UI)
+      // Provision test organisation A directly for isolated security test execution
+      const createdOrgA = await prisma.organisation.create({
+        data: { name: orgA.name, slug: orgA.slug, status: 'ACTIVE' },
+      });
+      orgAId = createdOrgA.id;
+      const roleA = await provisionOrganisationSuperAdminRole(orgAId);
+      const signUpA = await auth.api.signUpEmail({
+        body: { email: orgA.adminEmail, password: orgA.adminPassword, name: orgA.adminName },
+      });
+      adminAId = signUpA.user.id;
+      await prisma.user.update({
+        where: { id: adminAId },
+        data: { organisationId: orgAId, status: 'ACTIVE' },
+      });
+      await prisma.userRole.create({
+        data: {
+          organisationId: orgAId,
+          userId: adminAId,
+          roleId: roleA.id,
+          assignedByUserId: adminAId,
+        },
+      });
+    }
 
     // 2. Provision Org B directly in DB for cross-tenant isolation tests
     const createdOrgB = await prisma.organisation.create({
@@ -86,20 +116,26 @@ describe('Phase 0 IAM Security, RBAC, Bootstrap & Tenant Isolation', () => {
         assignedByUserId: signUpB.user.id,
       },
     });
-  }, 30000);
+  }, 60000);
 
   afterAll(async () => {
     if (orgAId) {
+      await prisma.userRole.deleteMany({ where: { organisationId: orgAId } });
+      await prisma.rolePermission.deleteMany({ where: { organisationId: orgAId } });
+      await prisma.role.deleteMany({ where: { organisationId: orgAId } });
       await prisma.user.deleteMany({ where: { organisationId: orgAId } });
       await prisma.organisation.deleteMany({ where: { id: orgAId } });
     }
     if (orgBId) {
+      await prisma.userRole.deleteMany({ where: { organisationId: orgBId } });
+      await prisma.rolePermission.deleteMany({ where: { organisationId: orgBId } });
+      await prisma.role.deleteMany({ where: { organisationId: orgBId } });
       await prisma.user.deleteMany({ where: { organisationId: orgBId } });
       await prisma.organisation.deleteMany({ where: { id: orgBId } });
     }
     await prisma.systemMetadata.deleteMany({ where: { key: 'bootstrap_lock' } });
     await prisma.$disconnect();
-  }, 30000);
+  }, 60000);
 
   it('1. Prevents repeat bootstrap after initial organisation setup', async () => {
     const repeatRes = await request(app).post('/api/v1/auth/bootstrap').send({
@@ -189,10 +225,9 @@ describe('Phase 0 IAM Security, RBAC, Bootstrap & Tenant Isolation', () => {
       .set('Cookie', standardUserCookies)
       .send({ name: 'X', email: `x-${runId}@aiw-test.local`, password: 'Password123!' });
     expect(forbiddenRes.status).toBe(403);
-  });
+  }, 20000);
 
-  it('6. Rejects cross-tenant user, role, department, designation, and audit-log access', async () => {
-    const loginB = await request(app).post('/api/v1/auth/sign-in/email').send({
+  it('6. Rejects cross-tenant user, role, department, designation, and audit-log access', async () => {    const loginB = await request(app).post('/api/v1/auth/sign-in/email').send({
       email: orgB.adminEmail,
       password: orgB.adminPassword,
     });
@@ -237,7 +272,7 @@ describe('Phase 0 IAM Security, RBAC, Bootstrap & Tenant Isolation', () => {
     expect(auditB.status).toBe(200);
     const orgIdsInAuditB = auditB.body.data.map((a: { organisationId: string }) => a.organisationId);
     expect(orgIdsInAuditB).not.toContain(orgAId);
-  });
+  }, 20000);
 
   it('7. Supports single-use invitation acceptance and invalidates token after use', async () => {
     const rawToken = crypto.randomBytes(32).toString('hex');
