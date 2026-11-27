@@ -7,7 +7,6 @@ import { auth } from '../common/auth/better-auth.js';
 import {
   PREDEFINED_ROLE_TEMPLATES,
   seedOrganisationRoleTemplates,
-  resetRoleToTemplateDefaults,
 } from '../common/rbac/permissions-catalog.js';
 
 const app = createApp();
@@ -109,6 +108,7 @@ describe('AIW OS — Predefined Organisation Role Templates & Scope Restrictions
       password: orgB.adminPassword,
     });
     adminBCookies = loginResB.headers['set-cookie'] as unknown as string[];
+    expect(adminBCookies).toBeDefined();
 
     // 3. Provision specific test users in Org A
     const workerRole = await prisma.role.findUniqueOrThrow({
@@ -258,7 +258,7 @@ describe('AIW OS — Predefined Organisation Role Templates & Scope Restrictions
         permissionCodes: ['projects.view', 'designs.view'],
       });
     expect(updateRes.status).toBe(200);
-    expect(updateRes.body.data.permissions).toEqual(['projects.view', 'designs.view']);
+    expect(updateRes.body.data.permissions.sort()).toEqual(['designs.view', 'projects.view']);
   });
 
   it('5. Reseeding does not overwrite customised permissions', async () => {

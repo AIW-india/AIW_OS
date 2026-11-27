@@ -166,6 +166,7 @@ describe('AIW OS — Phase 1: CRM Integration & Security Tests', () => {
       });
     expect(wonStageRes.status).toBe(201);
     wonStageId = wonStageRes.body.data.id;
+    expect(wonStageId).toBeDefined();
 
     const lostStageRes = await request(app)
       .post('/api/v1/crm/pipeline-stages')
@@ -179,6 +180,7 @@ describe('AIW OS — Phase 1: CRM Integration & Security Tests', () => {
       });
     expect(lostStageRes.status).toBe(201);
     lostStageId = lostStageRes.body.data.id;
+    expect(lostStageId).toBeDefined();
 
     // Create lead source
     const sourceRes = await request(app)

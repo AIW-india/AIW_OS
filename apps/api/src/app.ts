@@ -24,6 +24,11 @@ import { lostReasonRoutes } from './modules/crm/lost-reasons.routes.js';
 import { followUpRoutes } from './modules/crm/followups.routes.js';
 import { siteVisitRoutes } from './modules/crm/site-visits.routes.js';
 import { dashboardRoutes } from './modules/crm/dashboard.routes.js';
+import { materialRoutes } from './modules/estimation/materials.routes.js';
+import { labourRoutes } from './modules/estimation/labour.routes.js';
+import { templateRoutes } from './modules/estimation/templates.routes.js';
+import { estimateRoutes } from './modules/estimation/estimates.routes.js';
+import { quotationRoutes } from './modules/estimation/quotations.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -75,6 +80,15 @@ export function createApp(): Express {
   crmRouter.use('/dashboard', dashboardRoutes);
 
   v1Router.use('/crm', crmRouter);
+
+  // Estimation & BOQ routes (/api/v1/estimation/*)
+  const estimationRouter = Router();
+  estimationRouter.use('/materials', materialRoutes);
+  estimationRouter.use('/labour', labourRoutes);
+  estimationRouter.use('/templates', templateRoutes);
+  estimationRouter.use('/estimates', estimateRoutes);
+  estimationRouter.use('/quotations', quotationRoutes);
+  v1Router.use('/estimation', estimationRouter);
 
   app.use(`/api/${env.API_VERSION}`, v1Router);
 

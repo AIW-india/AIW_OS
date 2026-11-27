@@ -73,7 +73,6 @@ export const BASELINE_PERMISSIONS: PermissionDef[] = [
   { code: 'finance.receipts.manage', module: 'finance', action: 'manage_receipts', description: 'Record client receipts and payments', superAdminDefault: true },
   { code: 'finance.payments.manage', module: 'finance', action: 'manage_payments', description: 'Prepare vendor and sub-contractor payments', superAdminDefault: true },
   { code: 'finance.payments.approve', module: 'finance', action: 'approve_payments', description: 'Approve vendor payments and disbursements (Restricted)', superAdminDefault: false },
-  { code: 'quotations.approve', module: 'quotations', action: 'approve', description: 'Approve client commercial quotations and discounts (Restricted)', superAdminDefault: false },
 
   // Attendance & Workforce
   { code: 'attendance.check_in', module: 'attendance', action: 'check_in', description: 'Worker check-in with GPS and selfie verification', superAdminDefault: true },
@@ -107,6 +106,21 @@ export const BASELINE_PERMISSIONS: PermissionDef[] = [
   // CRM — Reports & Pipeline Config
   { code: 'crm.reports.view', module: 'crm', action: 'view', description: 'View CRM reports and dashboard', superAdminDefault: true },
   { code: 'crm.pipeline.manage', module: 'crm', action: 'manage', description: 'Configure pipeline stages, lead sources, lost reasons', superAdminDefault: true },
+
+  // Estimation & BOQ (Phase 2)
+  { code: 'estimation.rates.view', module: 'estimation', action: 'view_rates', description: 'View material and labour rate libraries', superAdminDefault: true },
+  { code: 'estimation.rates.manage', module: 'estimation', action: 'manage_rates', description: 'Create, update, and import/export material and labour rates', superAdminDefault: true },
+  { code: 'estimation.estimates.view', module: 'estimation', action: 'view_estimates', description: 'View estimates and BOQs', superAdminDefault: true },
+  { code: 'estimation.estimates.create', module: 'estimation', action: 'create_estimates', description: 'Create draft estimates and BOQs', superAdminDefault: true },
+  { code: 'estimation.estimates.update', module: 'estimation', action: 'update_estimates', description: 'Edit BOQ items, margins, wastage, and revision estimates', superAdminDefault: true },
+  { code: 'estimation.templates.manage', module: 'estimation', action: 'manage_templates', description: 'Manage reusable BOQ templates', superAdminDefault: true },
+
+  // Quotation Management (Phase 2)
+  { code: 'estimation.quotations.view', module: 'estimation', action: 'view_quotations', description: 'View quotations and revision history', superAdminDefault: true },
+  { code: 'estimation.quotations.create', module: 'estimation', action: 'create_quotations', description: 'Generate quotation from an estimate', superAdminDefault: true },
+  { code: 'estimation.quotations.update', module: 'estimation', action: 'update_quotations', description: 'Update terms, payment schedules, and create revisions', superAdminDefault: true },
+  { code: 'estimation.quotations.dispatch', module: 'estimation', action: 'dispatch_quotations', description: 'Dispatch approved quotation to client (Requires approval)', superAdminDefault: true },
+  { code: 'quotations.approve', module: 'quotations', action: 'approve', description: 'Approve client commercial quotations and discounts (Restricted)', superAdminDefault: false },
 ];
 
 export interface PredefinedRoleTemplate {
@@ -139,6 +153,9 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
       'crm.leads.view', 'crm.leads.create', 'crm.leads.update', 'crm.leads.assign', 'crm.leads.convert',
       'crm.customers.view', 'crm.customers.manage',
       'crm.followups.manage', 'crm.site_visits.manage', 'crm.reports.view',
+      'estimation.rates.view', 'estimation.rates.manage',
+      'estimation.estimates.view', 'estimation.estimates.create', 'estimation.estimates.update', 'estimation.templates.manage',
+      'estimation.quotations.view', 'estimation.quotations.create', 'estimation.quotations.update',
       'procurement.requests.view', 'procurement.inventory.view',
       'audit.view',
     ],
@@ -152,6 +169,8 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
       'designs.view', 'designs.approve_internal',
       'site.dpr.review', 'site.photos.upload', 'site.inspections.manage',
       'procurement.requests.create', 'procurement.requests.view',
+      'estimation.rates.view', 'estimation.estimates.view', 'estimation.estimates.create', 'estimation.estimates.update',
+      'estimation.templates.manage', 'estimation.quotations.view',
       'attendance.view_team',
       'crm.site_visits.manage',
     ],
@@ -164,6 +183,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
       'projects.view',
       'designs.view',
       'site.dpr.create', 'site.photos.upload', 'site.materials.request', 'site.inspections.manage',
+      'estimation.rates.view', 'estimation.estimates.view',
       'attendance.view_team', 'attendance.check_in', 'attendance.check_out', 'attendance.view_own',
       'crm.site_visits.manage',
     ],
@@ -175,6 +195,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
     defaultPermissions: [
       'projects.view',
       'designs.view', 'designs.create', 'designs.update', 'designs.approve_client',
+      'estimation.estimates.view', 'estimation.rates.view',
       'attendance.check_in', 'attendance.check_out', 'attendance.view_own',
     ],
   },
@@ -186,6 +207,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
       'projects.view', 'projects.costs.view',
       'finance.records.view', 'finance.expenses.view', 'finance.expenses.create',
       'finance.receipts.manage', 'finance.payments.manage',
+      'estimation.estimates.view', 'estimation.quotations.view', 'estimation.rates.view',
       'procurement.orders.create', 'procurement.deliveries.manage', 'procurement.inventory.view',
       'attendance.check_in', 'attendance.check_out', 'attendance.view_own',
     ],
@@ -193,12 +215,13 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
   {
     code: 'PROCUREMENT',
     name: 'Procurement',
-    description: 'Manages vendors, prepares purchase orders, compares quotations, tracks inventory and deliveries. Does not receive high-value purchase approval authority.',
+    description: 'Manages vendors, prepares purchase orders, compares quotations, tracks inventory and deliveries. Does not receive high-value purchase authority.',
     defaultPermissions: [
       'procurement.requests.view', 'procurement.vendors.manage',
       'procurement.quotations.compare', 'procurement.orders.create',
       'procurement.deliveries.manage', 'procurement.inventory.view',
       'procurement.approve',
+      'estimation.rates.view', 'estimation.rates.manage',
       'projects.view',
       'attendance.check_in', 'attendance.check_out', 'attendance.view_own',
     ],
@@ -232,7 +255,11 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
  * Ensures all baseline permissions exist in the global permissions table.
  * Uses a single query to find missing ones, then batch-inserts only what's new.
  */
+let baselinePermissionsEnsured = false;
+
 export async function ensureBaselinePermissions(): Promise<void> {
+  if (baselinePermissionsEnsured) return;
+
   const existingCodes = new Set(
     (await prisma.permission.findMany({ select: { code: true } })).map((p) => p.code),
   );
@@ -251,14 +278,7 @@ export async function ensureBaselinePermissions(): Promise<void> {
     });
   }
 
-  // Update existing descriptions/modules in bulk (upsert remaining ones)
-  const toUpdate = BASELINE_PERMISSIONS.filter((p) => existingCodes.has(p.code));
-  for (const perm of toUpdate) {
-    await prisma.permission.updateMany({
-      where: { code: perm.code },
-      data: { module: perm.module, action: perm.action, description: perm.description },
-    });
-  }
+  baselinePermissionsEnsured = true;
 }
 
 /**

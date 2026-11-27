@@ -69,6 +69,7 @@ describe('Phase 0 IAM Security, RBAC, Bootstrap & Tenant Isolation', () => {
       orgAId = resA.body.data.organisation.id;
       adminAId = resA.body.data.user.id;
       bootstrapped = true;
+      expect(bootstrapped).toBe(true);
     } else {
       // An organisation already exists in the dev database (e.g. created by user in UI)
       // Provision test organisation A directly for isolated security test execution
