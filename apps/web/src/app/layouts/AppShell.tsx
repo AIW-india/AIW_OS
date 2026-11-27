@@ -18,6 +18,11 @@ import {
   PhoneCall,
   MapPin,
   PieChart,
+  Calculator,
+  FileSpreadsheet,
+  FileText,
+  Boxes,
+  Hammer,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -43,6 +48,16 @@ export const navigationItems: NavigationItem[] = [
   { name: 'Customers', to: '/crm/customers', icon: UserCheck, permission: 'crm.customers.view' },
   { name: 'Follow-ups', to: '/crm/follow-ups', icon: PhoneCall, permission: 'crm.followups.manage' },
   { name: 'Site Visits', to: '/crm/site-visits', icon: MapPin, permission: 'crm.site_visits.manage' },
+  {
+    name: 'Estimation Hub',
+    to: '/estimation',
+    icon: Calculator,
+    anyPermissions: ['estimation.estimates.view', 'estimation.quotations.view', 'estimation.rates.view'],
+  },
+  { name: 'Estimates & BOQ', to: '/estimation/estimates', icon: FileSpreadsheet, permission: 'estimation.estimates.view' },
+  { name: 'Quotations', to: '/estimation/quotations', icon: FileText, permission: 'estimation.quotations.view' },
+  { name: 'Material Library', to: '/estimation/materials', icon: Boxes, permission: 'estimation.rates.view' },
+  { name: 'Labour Rates', to: '/estimation/labour', icon: Hammer, permission: 'estimation.rates.view' },
   { name: 'Users', to: '/users', icon: Users, permission: 'users.view' },
   { name: 'Departments', to: '/departments', icon: FolderTree, permission: 'departments.view' },
   { name: 'Designations', to: '/designations', icon: Award, permission: 'designations.view' },

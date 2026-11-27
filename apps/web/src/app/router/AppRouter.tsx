@@ -19,6 +19,15 @@ import { CustomerDetailsPage } from '@/modules/crm/CustomerDetailsPage';
 import { FollowUpsPage } from '@/modules/crm/FollowUpsPage';
 import { SiteVisitsPage } from '@/modules/crm/SiteVisitsPage';
 import { LostLeadsPage } from '@/modules/crm/LostLeadsPage';
+import { EstimationDashboardPage } from '@/modules/estimation/EstimationDashboardPage';
+import { EstimatesListPage } from '@/modules/estimation/EstimatesListPage';
+import { CreateEstimatePage } from '@/modules/estimation/CreateEstimatePage';
+import { EstimateDetailsPage } from '@/modules/estimation/EstimateDetailsPage';
+import { MaterialLibraryPage } from '@/modules/estimation/MaterialLibraryPage';
+import { LabourRateLibraryPage } from '@/modules/estimation/LabourRateLibraryPage';
+import { BoqTemplatesPage } from '@/modules/estimation/BoqTemplatesPage';
+import { QuotationsListPage } from '@/modules/estimation/QuotationsListPage';
+import { QuotationDetailsPage } from '@/modules/estimation/QuotationDetailsPage';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { LoadingSpinner } from '@/components/feedback/LoadingSpinner';
 import { AccessDeniedPage } from '@/components/feedback/AccessDeniedPage';
@@ -227,6 +236,84 @@ export function AppRouter() {
               </ProtectedRoute>
             }
           />
+
+          {/* Estimation & BOQ Module Routes */}
+          <Route
+            path="/estimation"
+            element={
+              <ProtectedRoute
+                anyPermissions={['estimation.estimates.view', 'estimation.quotations.view', 'estimation.rates.view']}
+                moduleName="Estimation Hub"
+              >
+                <EstimationDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/estimates"
+            element={
+              <ProtectedRoute permission="estimation.estimates.view" moduleName="Estimates & BOQ">
+                <EstimatesListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/estimates/create"
+            element={
+              <ProtectedRoute permission="estimation.estimates.create" moduleName="Create Estimate">
+                <CreateEstimatePage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/estimates/:id"
+            element={
+              <ProtectedRoute permission="estimation.estimates.view" moduleName="BOQ Builder & Estimate">
+                <EstimateDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/materials"
+            element={
+              <ProtectedRoute permission="estimation.rates.view" moduleName="Material Library">
+                <MaterialLibraryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/labour"
+            element={
+              <ProtectedRoute permission="estimation.rates.view" moduleName="Labour Rates">
+                <LabourRateLibraryPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/templates"
+            element={
+              <ProtectedRoute permission="estimation.estimates.view" moduleName="BOQ Templates">
+                <BoqTemplatesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/quotations"
+            element={
+              <ProtectedRoute permission="estimation.quotations.view" moduleName="Quotations">
+                <QuotationsListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/estimation/quotations/:id"
+            element={
+              <ProtectedRoute permission="estimation.quotations.view" moduleName="Quotation Details">
+                <QuotationDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
           <Route path="*" element={<NotFoundPage />} />
         </Route>
       </Routes>

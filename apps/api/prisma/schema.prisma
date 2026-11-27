@@ -53,6 +53,15 @@ model Organisation {
   siteVisits         SiteVisit[]
   leadActivities     LeadActivity[]
 
+  // Estimation & BOQ relations
+  materialCategories MaterialCategory[]
+  materials          Material[]
+  labourCategories   LabourCategory[]
+  labourRates        LabourRate[]
+  boqTemplates       BoqTemplate[]
+  estimates          Estimate[]
+  quotations         Quotation[]
+
   @@map("organisations")
 }
 
@@ -100,6 +109,11 @@ model User {
   createdSiteVisits     SiteVisit[]          @relation("SiteVisitCreatedBy")
   uploadedAttachments   SiteVisitAttachment[] @relation("SiteVisitAttachmentUploadedBy")
   leadActivitiesActor   LeadActivity[]       @relation("LeadActivityActor")
+
+  // Estimation relations
+  createdEstimates      Estimate[]           @relation("EstimateCreatedBy")
+  createdQuotations     Quotation[]          @relation("QuotationCreatedBy")
+  approvedQuotations    QuotationApproval[]  @relation("QuotationApprovedBy")
 
   @@index([organisationId])
   @@index([departmentId])
@@ -452,6 +466,7 @@ model Lead {
   siteVisits    SiteVisit[]         @relation("LeadSiteVisits")
   activities    LeadActivity[]
   customer      Customer?           @relation("ConvertedFromLead")
+  estimates     Estimate[]          @relation("LeadEstimates")
 
   @@unique([organisationId, leadNumber])
   @@index([organisationId])
@@ -532,6 +547,8 @@ model Customer {
   notes           CustomerNote[]
   followUps       FollowUp[]       @relation("CustomerFollowUps")
   siteVisits      SiteVisit[]      @relation("CustomerSiteVisits")
+  estimates       Estimate[]       @relation("CustomerEstimates")
+  quotations      Quotation[]      @relation("CustomerQuotations")
 
   @@unique([organisationId, customerNumber])
   @@index([organisationId])
@@ -713,4 +730,334 @@ model LeadActivity {
   @@index([leadId, occurredAt])
   @@index([organisationId])
   @@map("lead_activities")
+}
+
+
+// ==============================================================================
+// PHASE 2 — ESTIMATION, BOQ & QUOTATION MODULE
+// ==============================================================================
+
+// ------------------------------------------------------------------------------
+// MATERIAL LIBRARY & RATES
+// ------------------------------------------------------------------------------
+
+model MaterialCategory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  description    String?
+  parentId       String?  @map("parent_id") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation   Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  parent         MaterialCategory?   @relation("CategoryHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  subcategories  MaterialCategory[]  @relation("CategoryHierarchy")
+  materials      Material[]
+
+  @@unique([organisationId, name, parentId])
+  @@index([organisationId])
+  @@map("material_categories")
+}
+
+model Material {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  categoryId     String?  @map("category_id") @db.Uuid
+  name           String
+  sku            String   @map("sku") // unique per org
+  description    String?
+  unit           String   // e.g. SQFT, RFT, BAG, TON, NOS, CUM, KG, LTR
+  standardRate   Decimal  @default(0.00) @map("standard_rate") @db.Decimal(18, 2)
+  vendorRate     Decimal? @map("vendor_rate") @db.Decimal(18, 2)
+  preferredVendor String? @map("preferred_vendor")
+  hsnCode        String?  @map("hsn_code")
+  taxRate        Decimal  @default(18.00) @map("tax_rate") @db.Decimal(5, 2) // default GST %
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation       @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category     MaterialCategory?  @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  rateHistory  MaterialRateHistory[]
+  boqItems     BoqItem[]
+
+  @@unique([organisationId, sku])
+  @@index([organisationId, status])
+  @@index([organisationId, name])
+  @@map("materials")
+}
+
+model MaterialRateHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  materialId     String   @map("material_id") @db.Uuid
+  rate           Decimal  @db.Decimal(18, 2)
+  vendorRate     Decimal? @map("vendor_rate") @db.Decimal(18, 2)
+  changedByUserId String? @map("changed_by_user_id") @db.Uuid
+  reason         String?
+  effectiveFrom  DateTime @default(now()) @map("effective_from") @db.Timestamptz(6)
+
+  material Material @relation(fields: [materialId], references: [id], onDelete: Cascade)
+
+  @@index([materialId, effectiveFrom])
+  @@map("material_rate_history")
+}
+
+// ------------------------------------------------------------------------------
+// LABOUR & SERVICE RATE LIBRARY
+// ------------------------------------------------------------------------------
+
+model LabourCategory {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  description    String?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  labourRates  LabourRate[]
+
+  @@unique([organisationId, name])
+  @@index([organisationId])
+  @@map("labour_categories")
+}
+
+model LabourRate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  categoryId     String?  @map("category_id") @db.Uuid
+  workDescription String  @map("work_description")
+  code           String   @map("code") // e.g. LAB-CIV-001
+  unit           String   // e.g. SQFT, RFT, DAY, HOUR, POINT, NOS
+  standardRate   Decimal  @default(0.00) @map("standard_rate") @db.Decimal(18, 2)
+  status         String   @default("ACTIVE") // ACTIVE, INACTIVE
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  category     LabourCategory?   @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  rateHistory  LabourRateHistory[]
+  boqItems     BoqItem[]
+
+  @@unique([organisationId, code])
+  @@index([organisationId, status])
+  @@map("labour_rates")
+}
+
+model LabourRateHistory {
+  id             String   @id @default(uuid()) @db.Uuid
+  labourRateId   String   @map("labour_rate_id") @db.Uuid
+  rate           Decimal  @db.Decimal(18, 2)
+  changedByUserId String? @map("changed_by_user_id") @db.Uuid
+  reason         String?
+  effectiveFrom  DateTime @default(now()) @map("effective_from") @db.Timestamptz(6)
+
+  labourRate LabourRate @relation(fields: [labourRateId], references: [id], onDelete: Cascade)
+
+  @@index([labourRateId, effectiveFrom])
+  @@map("labour_rate_history")
+}
+
+// ------------------------------------------------------------------------------
+// BOQ TEMPLATES (REUSABLE PACKAGES)
+// ------------------------------------------------------------------------------
+
+model BoqTemplate {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  name           String
+  projectCategory String  @map("project_category") // RESIDENTIAL_CONSTRUCTION, RESIDENTIAL_INTERIOR, etc.
+  description    String?
+  templateData   Json     @map("template_data") // Structured sections, items, default units & multipliers
+  status         String   @default("ACTIVE")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, projectCategory])
+  @@map("boq_templates")
+}
+
+// ------------------------------------------------------------------------------
+// ESTIMATES & BOQ INSTANCES
+// ------------------------------------------------------------------------------
+
+model Estimate {
+  id              String   @id @default(uuid()) @db.Uuid
+  organisationId  String   @map("organisation_id") @db.Uuid
+  estimateNumber  String   @map("estimate_number") // EST-00001
+  title           String
+  description     String?
+  projectCategory String   @map("project_category") // RESIDENTIAL_CONSTRUCTION, COMMERCIAL_CONSTRUCTION, RESIDENTIAL_INTERIOR, COMMERCIAL_INTERIOR, RENOVATION, TURNKEY
+  projectLocation String?  @map("project_location")
+  leadId          String?  @map("lead_id") @db.Uuid
+  customerId      String?  @map("customer_id") @db.Uuid
+  status          String   @default("DRAFT") // DRAFT, UNDER_REVIEW, APPROVED, REVISED, ARCHIVED
+  currency        String   @default("INR")
+  
+  // Revision tracking
+  revisionNumber  Int      @default(1) @map("revision_number")
+  parentEstimateId String? @map("parent_estimate_id") @db.Uuid
+
+  // Financial aggregates calculated decimal-safe
+  totalMaterialCost Decimal @default(0.00) @map("total_material_cost") @db.Decimal(18, 2)
+  totalLabourCost   Decimal @default(0.00) @map("total_labour_cost") @db.Decimal(18, 2)
+  totalOtherCharges Decimal @default(0.00) @map("total_other_charges") @db.Decimal(18, 2)
+  subtotalCost      Decimal @default(0.00) @map("subtotal_cost") @db.Decimal(18, 2) // mat + lab + other
+  
+  wastagePercent    Decimal @default(0.00) @map("wastage_percent") @db.Decimal(5, 2)
+  wastageAmount     Decimal @default(0.00) @map("wastage_amount") @db.Decimal(18, 2)
+  
+  overheadPercent   Decimal @default(0.00) @map("overhead_percent") @db.Decimal(5, 2)
+  overheadAmount    Decimal @default(0.00) @map("overhead_amount") @db.Decimal(18, 2)
+  
+  profitMarginPercent Decimal @default(0.00) @map("profit_margin_percent") @db.Decimal(5, 2)
+  profitMarginAmount  Decimal @default(0.00) @map("profit_margin_amount") @db.Decimal(18, 2)
+  
+  discountPercent   Decimal @default(0.00) @map("discount_percent") @db.Decimal(5, 2)
+  discountAmount    Decimal @default(0.00) @map("discount_amount") @db.Decimal(18, 2)
+  
+  taxPercent        Decimal @default(18.00) @map("tax_percent") @db.Decimal(5, 2)
+  taxAmount         Decimal @default(0.00) @map("tax_amount") @db.Decimal(18, 2)
+  
+  grandTotal        Decimal @default(0.00) @map("grand_total") @db.Decimal(18, 2)
+
+  createdByUserId String?  @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation   Organisation   @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  lead           Lead?          @relation("LeadEstimates", fields: [leadId], references: [id], onDelete: SetNull)
+  customer       Customer?      @relation("CustomerEstimates", fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy      User?          @relation("EstimateCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  parentEstimate Estimate?      @relation("EstimateRevisions", fields: [parentEstimateId], references: [id], onDelete: SetNull)
+  revisions      Estimate[]     @relation("EstimateRevisions")
+  
+  sections       BoqSection[]
+  quotations     Quotation[]
+
+  @@unique([organisationId, estimateNumber, revisionNumber])
+  @@index([organisationId, status])
+  @@index([leadId])
+  @@index([customerId])
+  @@map("estimates")
+}
+
+model BoqSection {
+  id          String   @id @default(uuid()) @db.Uuid
+  estimateId  String   @map("estimate_id") @db.Uuid
+  title       String   // e.g. Civil Works, Flooring, Electrical, Modular Kitchen
+  description String?
+  orderIndex  Int      @default(0) @map("order_index")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  estimate    Estimate    @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  items       BoqItem[]
+
+  @@index([estimateId, orderIndex])
+  @@map("boq_sections")
+}
+
+model BoqItem {
+  id             String   @id @default(uuid()) @db.Uuid
+  sectionId      String   @map("section_id") @db.Uuid
+  orderIndex     Int      @default(0) @map("order_index")
+  description    String   // Work / Item description
+  
+  // Material component
+  materialId     String?  @map("material_id") @db.Uuid
+  materialQty    Decimal  @default(0.00) @map("material_qty") @db.Decimal(18, 4)
+  materialUnit   String?  @map("material_unit")
+  materialRate   Decimal  @default(0.00) @map("material_rate") @db.Decimal(18, 2)
+  materialTotal  Decimal  @default(0.00) @map("material_total") @db.Decimal(18, 2)
+  
+  // Labour component
+  labourRateId   String?  @map("labour_rate_id") @db.Uuid
+  labourQty      Decimal  @default(0.00) @map("labour_qty") @db.Decimal(18, 4)
+  labourUnit     String?  @map("labour_unit")
+  labourRate     Decimal  @default(0.00) @map("labour_rate") @db.Decimal(18, 2)
+  labourTotal    Decimal  @default(0.00) @map("labour_total") @db.Decimal(18, 2)
+
+  // Other component
+  otherCharges   Decimal  @default(0.00) @map("other_charges") @db.Decimal(18, 2)
+  
+  // Line item total
+  itemTotal      Decimal  @default(0.00) @map("item_total") @db.Decimal(18, 2) // materialTotal + labourTotal + otherCharges
+
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  section        BoqSection  @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  material       Material?   @relation(fields: [materialId], references: [id], onDelete: SetNull)
+  labour         LabourRate? @relation(fields: [labourRateId], references: [id], onDelete: SetNull)
+
+  @@index([sectionId, orderIndex])
+  @@map("boq_items")
+}
+
+// ------------------------------------------------------------------------------
+// QUOTATIONS & COMMERCIAL APPROVAL WORKFLOW
+// ------------------------------------------------------------------------------
+
+model Quotation {
+  id              String    @id @default(uuid()) @db.Uuid
+  organisationId  String    @map("organisation_id") @db.Uuid
+  quotationNumber String    @map("quotation_number") // QT-00001
+  revisionNumber  Int       @default(1) @map("revision_number")
+  estimateId      String    @map("estimate_id") @db.Uuid
+  customerId      String?   @map("customer_id") @db.Uuid
+  title           String
+  
+  // Status workflow: DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, DISPATCHED, ACCEPTED, DECLINED
+  status          String    @default("DRAFT")
+  
+  // Commercial details
+  validUntil      DateTime? @map("valid_until") @db.Timestamptz(6)
+  termsAndConditions String? @map("terms_and_conditions")
+  paymentSchedule Json?     @map("payment_schedule") // Milestones & % payments
+  
+  // Financial Snapshot
+  subtotal        Decimal   @default(0.00) @db.Decimal(18, 2)
+  discountAmount  Decimal   @default(0.00) @map("discount_amount") @db.Decimal(18, 2)
+  taxAmount       Decimal   @default(0.00) @map("tax_amount") @db.Decimal(18, 2)
+  grandTotal      Decimal   @default(0.00) @map("grand_total") @db.Decimal(18, 2)
+  currency        String    @default("INR")
+
+  // Dispatch details
+  dispatchedAt    DateTime? @map("dispatched_at") @db.Timestamptz(6)
+  dispatchedTo    String?   @map("dispatched_to")
+
+  createdByUserId String?   @map("created_by_user_id") @db.Uuid
+  createdAt       DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation    Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  estimate        Estimate            @relation(fields: [estimateId], references: [id], onDelete: Cascade)
+  customer        Customer?           @relation("CustomerQuotations", fields: [customerId], references: [id], onDelete: SetNull)
+  createdBy       User?               @relation("QuotationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  approvals       QuotationApproval[]
+
+  @@unique([organisationId, quotationNumber, revisionNumber])
+  @@index([organisationId, status])
+  @@index([estimateId])
+  @@index([customerId])
+  @@map("quotations")
+}
+
+model QuotationApproval {
+  id             String   @id @default(uuid()) @db.Uuid
+  quotationId    String   @map("quotation_id") @db.Uuid
+  approverUserId String?  @map("approver_user_id") @db.Uuid
+  decision       String   // APPROVED, REJECTED
+  comments       String?
+  decidedAt      DateTime @default(now()) @map("decided_at") @db.Timestamptz(6)
+
+  quotation Quotation @relation(fields: [quotationId], references: [id], onDelete: Cascade)
+  approver  User?     @relation("QuotationApprovedBy", fields: [approverUserId], references: [id], onDelete: SetNull)
+
+  @@index([quotationId, decidedAt])
+  @@map("quotation_approvals")
 }
