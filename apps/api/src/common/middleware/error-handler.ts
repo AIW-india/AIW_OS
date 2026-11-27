@@ -13,7 +13,8 @@ export function errorHandlerMiddleware(
   const requestId = req.id;
 
   if (err instanceof AppError) {
-    const response: ApiErrorResponse = {
+    const response = {
+      message: err.message,
       error: {
         code: err.code,
         message: err.message,

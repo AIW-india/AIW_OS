@@ -34,6 +34,18 @@ export class NotFoundError extends AppError {
   }
 }
 
+export class ForbiddenError extends AppError {
+  constructor(message = 'Forbidden') {
+    super(message, 403, 'FORBIDDEN');
+  }
+}
+
+export class UnauthorizedError extends AppError {
+  constructor(message = 'Unauthorized') {
+    super(message, 401, 'UNAUTHORIZED');
+  }
+}
+
 export class ValidationError extends AppError {
   constructor(message = 'Validation failed', details?: ApiErrorDetail[]) {
     super(message, 422, 'VALIDATION_ERROR', details);

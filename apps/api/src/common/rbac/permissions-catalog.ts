@@ -32,12 +32,22 @@ export const BASELINE_PERMISSIONS: PermissionDef[] = [
   { code: 'roles.create', module: 'roles', action: 'create', description: 'Create custom roles', superAdminDefault: true },
   { code: 'roles.manage', module: 'roles', action: 'manage', description: 'Update roles, configure permissions, and assign user roles', superAdminDefault: true },
 
-  // Projects
-  { code: 'projects.view', module: 'projects', action: 'view', description: 'View projects', superAdminDefault: true },
-  { code: 'projects.create', module: 'projects', action: 'create', description: 'Create new projects', superAdminDefault: true },
-  { code: 'projects.update', module: 'projects', action: 'update', description: 'Update project details and settings', superAdminDefault: true },
-  { code: 'projects.assign', module: 'projects', action: 'assign', description: 'Assign project teams and members', superAdminDefault: true },
-  { code: 'projects.membership.manage', module: 'projects', action: 'manage', description: 'Manage user project memberships', superAdminDefault: true },
+  // Projects & Execution
+  { code: 'projects.view', module: 'projects', action: 'view', description: 'View assigned or permitted projects', superAdminDefault: true },
+  { code: 'projects.view_all', module: 'projects', action: 'view_all', description: 'View all organisation projects regardless of assignment', superAdminDefault: true },
+  { code: 'projects.create', module: 'projects', action: 'create', description: 'Create new projects from accepted quotations or proposals', superAdminDefault: true },
+  { code: 'projects.update', module: 'projects', action: 'update', description: 'Update project details, schedule, and settings', superAdminDefault: true },
+  { code: 'projects.delete', module: 'projects', action: 'delete', description: 'Archive or delete projects', superAdminDefault: true },
+  { code: 'projects.assign', module: 'projects', action: 'assign', description: 'Assign project manager and team members', superAdminDefault: true },
+  { code: 'projects.membership.manage', module: 'projects', action: 'manage_membership', description: 'Manage user project memberships and roles', superAdminDefault: true },
+  { code: 'projects.milestones.manage', module: 'projects', action: 'manage_milestones', description: 'Create, update, and sequence project milestones', superAdminDefault: true },
+  { code: 'projects.tasks.create', module: 'projects', action: 'create_tasks', description: 'Create project tasks', superAdminDefault: true },
+  { code: 'projects.tasks.assign', module: 'projects', action: 'assign_tasks', description: 'Assign tasks to team members', superAdminDefault: true },
+  { code: 'projects.tasks.update', module: 'projects', action: 'update_tasks', description: 'Update task status, priority, and completion', superAdminDefault: true },
+  { code: 'projects.documents.view', module: 'projects', action: 'view_documents', description: 'View and download project documents', superAdminDefault: true },
+  { code: 'projects.documents.upload', module: 'projects', action: 'upload_documents', description: 'Upload project drawings, contracts, and documents', superAdminDefault: true },
+  { code: 'projects.documents.delete', module: 'projects', action: 'delete_documents', description: 'Delete project documents', superAdminDefault: true },
+  { code: 'projects.budget.view', module: 'projects', action: 'view_budget', description: 'View commercial baseline and project budget', superAdminDefault: true },
   { code: 'projects.costs.view', module: 'projects', action: 'view_costs', description: 'View project financial costs and budget utilisation', superAdminDefault: true },
 
   // Designs
@@ -147,7 +157,9 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
       'departments.view', 'departments.manage',
       'designations.view', 'designations.manage',
       'roles.view',
-      'projects.view', 'projects.create', 'projects.update', 'projects.assign', 'projects.membership.manage',
+      'projects.view', 'projects.view_all', 'projects.create', 'projects.update', 'projects.assign', 'projects.membership.manage',
+      'projects.milestones.manage', 'projects.tasks.create', 'projects.tasks.assign', 'projects.tasks.update',
+      'projects.documents.view', 'projects.documents.upload', 'projects.documents.delete', 'projects.budget.view', 'projects.costs.view',
       'workforce.view', 'workforce.create', 'workforce.update',
       'attendance.view_team', 'attendance.manage',
       'crm.leads.view', 'crm.leads.create', 'crm.leads.update', 'crm.leads.assign', 'crm.leads.convert',
@@ -165,7 +177,9 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
     name: 'Project Manager',
     description: 'Manages assigned projects, milestones, designs, site DPR review, inspections, and material requests within permitted scope. Cannot approve high-value procurement or commercial quotations.',
     defaultPermissions: [
-      'projects.view', 'projects.update', 'projects.assign', 'projects.membership.manage', 'projects.costs.view',
+      'projects.view', 'projects.update', 'projects.assign', 'projects.membership.manage',
+      'projects.milestones.manage', 'projects.tasks.create', 'projects.tasks.assign', 'projects.tasks.update',
+      'projects.documents.view', 'projects.documents.upload', 'projects.budget.view', 'projects.costs.view',
       'designs.view', 'designs.approve_internal',
       'site.dpr.review', 'site.photos.upload', 'site.inspections.manage',
       'procurement.requests.create', 'procurement.requests.view',
@@ -180,7 +194,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
     name: 'Site Engineer / Supervisor',
     description: 'Field engineer responsible for site execution, daily progress reports (DPR), site attendance, photos, quality inspections, and material requests. No financial or company-wide administrative access.',
     defaultPermissions: [
-      'projects.view',
+      'projects.view', 'projects.tasks.update', 'projects.documents.view', 'projects.documents.upload',
       'designs.view',
       'site.dpr.create', 'site.photos.upload', 'site.materials.request', 'site.inspections.manage',
       'estimation.rates.view', 'estimation.estimates.view',
@@ -193,7 +207,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
     name: 'Architect / Interior Designer',
     description: 'Designs blueprints, 3D renders, and revisions. Submits designs for internal and client reviews. Cannot act as final independent commercial/financial approver.',
     defaultPermissions: [
-      'projects.view',
+      'projects.view', 'projects.documents.view', 'projects.documents.upload',
       'designs.view', 'designs.create', 'designs.update', 'designs.approve_client',
       'estimation.estimates.view', 'estimation.rates.view',
       'attendance.check_in', 'attendance.check_out', 'attendance.view_own',
@@ -204,7 +218,7 @@ export const PREDEFINED_ROLE_TEMPLATES: PredefinedRoleTemplate[] = [
     name: 'Accounts',
     description: 'Manages financial records, client receipts, expense entries, vendor payment vouchers, and approved quotations. Separate approval required for payment release.',
     defaultPermissions: [
-      'projects.view', 'projects.costs.view',
+      'projects.view', 'projects.budget.view', 'projects.costs.view',
       'finance.records.view', 'finance.expenses.view', 'finance.expenses.create',
       'finance.receipts.manage', 'finance.payments.manage',
       'estimation.estimates.view', 'estimation.quotations.view', 'estimation.rates.view',

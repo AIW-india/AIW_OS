@@ -23,6 +23,8 @@ import {
   FileText,
   Boxes,
   Hammer,
+  Briefcase,
+  Calendar,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth/AuthContext';
@@ -58,6 +60,24 @@ export const navigationItems: NavigationItem[] = [
   { name: 'Quotations', to: '/estimation/quotations', icon: FileText, permission: 'estimation.quotations.view' },
   { name: 'Material Library', to: '/estimation/materials', icon: Boxes, permission: 'estimation.rates.view' },
   { name: 'Labour Rates', to: '/estimation/labour', icon: Hammer, permission: 'estimation.rates.view' },
+  {
+    name: 'Projects Dashboard',
+    to: '/projects',
+    icon: PieChart,
+    permission: 'projects.view',
+  },
+  {
+    name: 'Projects & Execution',
+    to: '/projects/list',
+    icon: Briefcase,
+    permission: 'projects.view',
+  },
+  {
+    name: 'Milestone Templates',
+    to: '/projects/templates',
+    icon: Calendar,
+    permission: 'projects.milestones.manage',
+  },
   { name: 'Users', to: '/users', icon: Users, permission: 'users.view' },
   { name: 'Departments', to: '/departments', icon: FolderTree, permission: 'departments.view' },
   { name: 'Designations', to: '/designations', icon: Award, permission: 'designations.view' },

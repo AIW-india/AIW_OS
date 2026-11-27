@@ -29,6 +29,11 @@ import { labourRoutes } from './modules/estimation/labour.routes.js';
 import { templateRoutes } from './modules/estimation/templates.routes.js';
 import { estimateRoutes } from './modules/estimation/estimates.routes.js';
 import { quotationRoutes } from './modules/estimation/quotations.routes.js';
+import projectRoutes from './modules/projects/projects.routes.js';
+import milestoneRoutes from './modules/projects/milestones.routes.js';
+import taskRoutes from './modules/projects/tasks.routes.js';
+import documentRoutes from './modules/projects/documents.routes.js';
+import milestoneTemplateRoutes from './modules/projects/milestone-templates.routes.js';
 
 export function createApp(): Express {
   const app = express();
@@ -89,6 +94,16 @@ export function createApp(): Express {
   estimationRouter.use('/estimates', estimateRoutes);
   estimationRouter.use('/quotations', quotationRoutes);
   v1Router.use('/estimation', estimationRouter);
+
+  // Phase 3: Project Management routes (/api/v1/projects/*)
+  const projectModuleRouter = Router();
+  projectModuleRouter.use('/milestones', milestoneRoutes);
+  projectModuleRouter.use('/tasks', taskRoutes);
+  projectModuleRouter.use('/documents', documentRoutes);
+  projectModuleRouter.use('/templates', milestoneTemplateRoutes);
+  projectModuleRouter.use('/milestone-templates', milestoneTemplateRoutes);
+  projectModuleRouter.use('/', projectRoutes);
+  v1Router.use('/projects', projectModuleRouter);
 
   app.use(`/api/${env.API_VERSION}`, v1Router);
 
