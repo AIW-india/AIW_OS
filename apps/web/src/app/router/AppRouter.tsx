@@ -28,6 +28,11 @@ import { LabourRateLibraryPage } from '@/modules/estimation/LabourRateLibraryPag
 import { BoqTemplatesPage } from '@/modules/estimation/BoqTemplatesPage';
 import { QuotationsListPage } from '@/modules/estimation/QuotationsListPage';
 import { QuotationDetailsPage } from '@/modules/estimation/QuotationDetailsPage';
+import { ProjectsDashboardPage } from '@/modules/projects/ProjectsDashboardPage';
+import { ProjectsListPage } from '@/modules/projects/ProjectsListPage';
+import { CreateProjectPage } from '@/modules/projects/CreateProjectPage';
+import { ProjectDetailsPage } from '@/modules/projects/ProjectDetailsPage';
+import { MilestoneTemplatesPage } from '@/modules/projects/MilestoneTemplatesPage';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { LoadingSpinner } from '@/components/feedback/LoadingSpinner';
 import { AccessDeniedPage } from '@/components/feedback/AccessDeniedPage';
@@ -310,6 +315,48 @@ export function AppRouter() {
             element={
               <ProtectedRoute permission="estimation.quotations.view" moduleName="Quotation Details">
                 <QuotationDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Phase 3 - Projects & Execution */}
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute permission="projects.view" moduleName="Projects Dashboard">
+                <ProjectsDashboardPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/list"
+            element={
+              <ProtectedRoute permission="projects.view" moduleName="Projects & Execution">
+                <ProjectsListPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/create"
+            element={
+              <ProtectedRoute permission="projects.create" moduleName="Create Project">
+                <CreateProjectPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/templates"
+            element={
+              <ProtectedRoute permission="projects.milestones.manage" moduleName="Milestone Templates">
+                <MilestoneTemplatesPage />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/projects/:id"
+            element={
+              <ProtectedRoute permission="projects.view" moduleName="Project Workspace">
+                <ProjectDetailsPage />
               </ProtectedRoute>
             }
           />

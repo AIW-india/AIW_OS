@@ -62,6 +62,14 @@ model Organisation {
   estimates          Estimate[]
   quotations         Quotation[]
 
+  // Project Management relations
+  projects           Project[]
+  projectMilestones  ProjectMilestone[]
+  projectTasks       ProjectTask[]
+  projectDocuments   ProjectDocument[]
+  projectActivities  ProjectActivity[]
+  milestoneTemplates ProjectMilestoneTemplate[]
+
   @@map("organisations")
 }
 
@@ -114,6 +122,16 @@ model User {
   createdEstimates      Estimate[]           @relation("EstimateCreatedBy")
   createdQuotations     Quotation[]          @relation("QuotationCreatedBy")
   approvedQuotations    QuotationApproval[]  @relation("QuotationApprovedBy")
+
+  // Project Management relations
+  managedProjects       Project[]            @relation("ProjectManager")
+  createdProjects       Project[]            @relation("ProjectCreatedBy")
+  assignedTasks         ProjectTask[]        @relation("TaskAssignedTo")
+  createdTasks          ProjectTask[]        @relation("TaskCreatedBy")
+  taskComments          ProjectTaskComment[] @relation("TaskCommentAuthor")
+  uploadedDocuments     ProjectDocument[]    @relation("DocumentUploadedBy")
+  projectActivities     ProjectActivity[]    @relation("ProjectActivityActor")
+  assignedMilestones    ProjectMilestone[]   @relation("MilestoneResponsibleUser")
 
   @@index([organisationId])
   @@index([departmentId])
@@ -290,16 +308,18 @@ model ProjectMembership {
   organisationId String   @map("organisation_id") @db.Uuid
   projectId      String   @map("project_id") @db.Uuid
   userId         String   @map("user_id") @db.Uuid
-  projectRole    String   @map("project_role")
+  projectRole    String   @map("project_role") // PROJECT_MANAGER, SITE_ENGINEER, ARCHITECT_DESIGNER, QA_QC, CONSULTANT
   status         String   @default("ACTIVE") // ACTIVE, REVOKED
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
 
   organisation Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  project      Project      @relation("ProjectMemberships", fields: [projectId], references: [id], onDelete: Cascade)
 
   @@unique([organisationId, projectId, userId])
   @@index([organisationId])
+  @@index([projectId])
   @@index([userId])
   @@map("project_memberships")
 }
@@ -549,6 +569,7 @@ model Customer {
   siteVisits      SiteVisit[]      @relation("CustomerSiteVisits")
   estimates       Estimate[]       @relation("CustomerEstimates")
   quotations      Quotation[]      @relation("CustomerQuotations")
+  projects        Project[]        @relation("CustomerProjects")
 
   @@unique([organisationId, customerNumber])
   @@index([organisationId])
@@ -1039,6 +1060,7 @@ model Quotation {
   customer        Customer?           @relation("CustomerQuotations", fields: [customerId], references: [id], onDelete: SetNull)
   createdBy       User?               @relation("QuotationCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
   approvals       QuotationApproval[]
+  createdProjects Project[]           @relation("QuotationProjects")
 
   @@unique([organisationId, quotationNumber, revisionNumber])
   @@index([organisationId, status])
@@ -1060,4 +1082,217 @@ model QuotationApproval {
 
   @@index([quotationId, decidedAt])
   @@map("quotation_approvals")
+}
+
+// ==============================================================================
+// PHASE 3: PROJECT MANAGEMENT & EXECUTION MODELS
+// ==============================================================================
+
+model Project {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  projectNumber       String    @map("project_number") // PRJ-00001
+  name                String
+  description         String?
+  projectCategory     String    @map("project_category") // RESIDENTIAL_INTERIOR, RESIDENTIAL_CONSTRUCTION, COMMERCIAL_INTERIOR, COMMERCIAL_CONSTRUCTION, RENOVATION, TURNKEY
+  siteAddress         String?   @map("site_address")
+  
+  // Status & Priority
+  status              String    @default("NOT_STARTED") // NOT_STARTED, IN_PROGRESS, ON_HOLD, COMPLETED, CANCELLED
+  priority            String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  
+  // Schedule
+  startDate           DateTime? @map("start_date") @db.Timestamptz(6)
+  expectedEndDate     DateTime? @map("expected_end_date") @db.Timestamptz(6)
+  actualCompletionDate DateTime? @map("actual_completion_date") @db.Timestamptz(6)
+  
+  // Progress (Derived from backend calculations: 0 - 100)
+  progressPercentage  Decimal   @default(0.00) @map("progress_percentage") @db.Decimal(5, 2)
+  manualProgressOverride Boolean @default(false) @map("manual_progress_override")
+
+  // Relationships
+  customerId          String?   @map("customer_id") @db.Uuid
+  projectManagerId    String?   @map("project_manager_id") @db.Uuid
+  
+  // Commercial Baseline: Exact immutable accepted quotation revision
+  sourceQuotationId   String?   @map("source_quotation_id") @db.Uuid
+  sourceQuotationNumber String? @map("source_quotation_number")
+  sourceQuotationRevision Int?  @map("source_quotation_revision")
+  
+  // Budget Baseline (Fixed snapshot of accepted quotation)
+  budgetBaselineAmount Decimal  @default(0.00) @map("budget_baseline_amount") @db.Decimal(18, 2)
+  approvedBoqSnapshot Json?     @map("approved_boq_snapshot") // Frozen copy of sections & items
+  currency            String    @default("INR")
+
+  createdByUserId     String?   @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  // Relations
+  organisation        Organisation        @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  customer            Customer?           @relation("CustomerProjects", fields: [customerId], references: [id], onDelete: SetNull)
+  projectManager      User?               @relation("ProjectManager", fields: [projectManagerId], references: [id], onDelete: SetNull)
+  sourceQuotation     Quotation?          @relation("QuotationProjects", fields: [sourceQuotationId], references: [id], onDelete: SetNull)
+  createdBy           User?               @relation("ProjectCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+
+  memberships         ProjectMembership[] @relation("ProjectMemberships")
+  milestones          ProjectMilestone[]
+  tasks               ProjectTask[]
+  documents           ProjectDocument[]
+  activities          ProjectActivity[]
+
+  @@unique([organisationId, projectNumber])
+  @@index([organisationId, status])
+  @@index([organisationId, projectManagerId])
+  @@index([customerId])
+  @@index([sourceQuotationId])
+  @@map("projects")
+}
+
+model ProjectMilestoneTemplate {
+  id              String   @id @default(uuid()) @db.Uuid
+  organisationId  String   @map("organisation_id") @db.Uuid
+  name            String
+  projectCategory String   @map("project_category")
+  description     String?
+  templateData    Json     @map("template_data") // Array of predefined phases/milestones with sequences
+  isDefault       Boolean  @default(false) @map("is_default")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+
+  @@index([organisationId, projectCategory])
+  @@map("project_milestone_templates")
+}
+
+model ProjectMilestone {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  projectId           String    @map("project_id") @db.Uuid
+  name                String
+  phaseName           String    @map("phase_name") // e.g. "Initial Planning", "Execution"
+  description         String?
+  sequenceOrder       Int       @default(1) @map("sequence_order")
+  
+  // Status: NOT_STARTED, IN_PROGRESS, COMPLETED, DELAYED
+  status              String    @default("NOT_STARTED")
+  progressPercentage  Decimal   @default(0.00) @map("progress_percentage") @db.Decimal(5, 2)
+  
+  // Schedule
+  plannedStartDate    DateTime? @map("planned_start_date") @db.Timestamptz(6)
+  plannedEndDate      DateTime? @map("planned_end_date") @db.Timestamptz(6)
+  actualCompletionDate DateTime? @map("actual_completion_date") @db.Timestamptz(6)
+  
+  // Dependencies (Self-referential Milestone dependency)
+  predecessorMilestoneId String? @map("predecessor_milestone_id") @db.Uuid
+
+  responsibleUserId   String?   @map("responsible_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation        Organisation      @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project             Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  responsibleUser     User?             @relation("MilestoneResponsibleUser", fields: [responsibleUserId], references: [id], onDelete: SetNull)
+  predecessor         ProjectMilestone? @relation("MilestoneDependency", fields: [predecessorMilestoneId], references: [id], onDelete: SetNull)
+  dependentMilestones ProjectMilestone[] @relation("MilestoneDependency")
+  tasks               ProjectTask[]
+
+  @@index([organisationId])
+  @@index([projectId, sequenceOrder])
+  @@map("project_milestones")
+}
+
+model ProjectTask {
+  id                  String    @id @default(uuid()) @db.Uuid
+  organisationId      String    @map("organisation_id") @db.Uuid
+  projectId           String    @map("project_id") @db.Uuid
+  milestoneId         String?   @map("milestone_id") @db.Uuid
+  title               String
+  description         String?
+  
+  // Status & Priority
+  status              String    @default("TODO") // TODO, IN_PROGRESS, BLOCKED, COMPLETED, CANCELLED
+  priority            String    @default("MEDIUM") // LOW, MEDIUM, HIGH, URGENT
+  
+  // Schedule
+  startDate           DateTime? @map("start_date") @db.Timestamptz(6)
+  dueDate             DateTime? @map("due_date") @db.Timestamptz(6)
+  completedAt         DateTime? @map("completed_at") @db.Timestamptz(6)
+
+  // Assignee
+  assigneeUserId      String?   @map("assignee_user_id") @db.Uuid
+  createdByUserId     String?   @map("created_by_user_id") @db.Uuid
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamptz(6)
+
+  organisation        Organisation         @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project             Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  milestone           ProjectMilestone?    @relation(fields: [milestoneId], references: [id], onDelete: SetNull)
+  assignee            User?                @relation("TaskAssignedTo", fields: [assigneeUserId], references: [id], onDelete: SetNull)
+  createdBy           User?                @relation("TaskCreatedBy", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  comments            ProjectTaskComment[]
+
+  @@index([organisationId, status])
+  @@index([projectId, status])
+  @@index([milestoneId])
+  @@index([assigneeUserId])
+  @@map("project_tasks")
+}
+
+model ProjectTaskComment {
+  id             String      @id @default(uuid()) @db.Uuid
+  taskId         String      @map("task_id") @db.Uuid
+  authorUserId   String?     @map("author_user_id") @db.Uuid
+  content        String
+  attachments    Json?       // Optional array of file metadata
+  createdAt      DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  task           ProjectTask @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  author         User?       @relation("TaskCommentAuthor", fields: [authorUserId], references: [id], onDelete: SetNull)
+
+  @@index([taskId, createdAt])
+  @@map("project_task_comments")
+}
+
+model ProjectDocument {
+  id              String   @id @default(uuid()) @db.Uuid
+  organisationId  String   @map("organisation_id") @db.Uuid
+  projectId       String   @map("project_id") @db.Uuid
+  title           String
+  category        String   // DRAWINGS, CLIENT_APPROVALS, CONTRACTS, SITE_PHOTOGRAPHS, TECHNICAL_SPECS, OTHER
+  fileName        String   @map("file_name")
+  fileSize        Int      @map("file_size") // In bytes
+  mimeType        String   @map("mime_type")
+  fileUrl         String   @map("file_url")
+  description     String?
+  uploadedByUserId String? @map("uploaded_by_user_id") @db.Uuid
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organisation    Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  uploadedBy      User?        @relation("DocumentUploadedBy", fields: [uploadedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId])
+  @@index([projectId, category])
+  @@map("project_documents")
+}
+
+model ProjectActivity {
+  id             String   @id @default(uuid()) @db.Uuid
+  organisationId String   @map("organisation_id") @db.Uuid
+  projectId      String   @map("project_id") @db.Uuid
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  action         String   // project.created, task.completed, milestone.updated, member.assigned, etc.
+  description    String
+  metadata       Json?
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  organisation   Organisation @relation(fields: [organisationId], references: [id], onDelete: Cascade)
+  project        Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  actor          User?        @relation("ProjectActivityActor", fields: [actorUserId], references: [id], onDelete: SetNull)
+
+  @@index([organisationId])
+  @@index([projectId, createdAt])
+  @@map("project_activities")
 }
