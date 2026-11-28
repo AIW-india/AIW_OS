@@ -420,3 +420,42 @@ export async function provisionOrganisationSuperAdminRole(organisationId: string
 
   return superAdminRole;
 }
+
+/**
+ * Ensures all existing ORGANISATION_SUPER_ADMIN roles have all permissions
+ * marked with `superAdminDefault: true` in BASELINE_PERMISSIONS.
+ * Safe to run on startup: only adds missing permissions (skipDuplicates: true)
+ * and never modifies other roles or removes existing permissions.
+ */
+export async function syncSuperAdminPermissions(): Promise<void> {
+  await ensureBaselinePermissions();
+
+  const superAdminPermCodes = BASELINE_PERMISSIONS.filter((p) => p.superAdminDefault).map(
+    (p) => p.code,
+  );
+  if (superAdminPermCodes.length === 0) return;
+
+  const perms = await prisma.permission.findMany({
+    where: { code: { in: superAdminPermCodes } },
+    select: { id: true },
+  });
+  if (perms.length === 0) return;
+
+  const superAdminRoles = await prisma.role.findMany({
+    where: { code: 'ORGANISATION_SUPER_ADMIN' },
+    select: { id: true, organisationId: true },
+  });
+
+  for (const role of superAdminRoles) {
+    await prisma.rolePermission.createMany({
+      data: perms.map((perm) => ({
+        organisationId: role.organisationId,
+        roleId: role.id,
+        permissionId: perm.id,
+        scopeType: 'ORGANISATION',
+        effect: 'ALLOW',
+      })),
+      skipDuplicates: true,
+    });
+  }
+}
